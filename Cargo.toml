@@ -1,0 +1,8 @@
+[package]
+name = "CodeWars-rust-cgdk"
+version = "0.1.0"
+authors = ["elsid <elsid.mail@gmail.com>"]
+
+[dependencies]
+argparse = "*"
+byteorder = "*"
