@@ -12,6 +12,7 @@ pub struct Move {
     x: f64,
     y: f64,
     angle: f64,
+    factor: f64,
     max_speed: f64,
     max_angular_speed: f64,
     vehicle_type: VehicleType,
@@ -30,6 +31,7 @@ impl Move {
             x: 0.0,
             y: 0.0,
             angle: 0.0,
+            factor: 0.0,
             max_speed: 0.0,
             max_angular_speed: 0.0,
             vehicle_type: VehicleType::Unknown,
@@ -115,6 +117,15 @@ impl Move {
 
     pub fn set_angle(&mut self, value: f64) -> &mut Self {
         self.angle = value;
+        self
+    }
+
+    pub fn factor(&self) -> f64 {
+        self.factor
+    }
+
+    pub fn set_factor(&mut self, value: f64) -> &mut Self {
+        self.factor = value;
         self
     }
 

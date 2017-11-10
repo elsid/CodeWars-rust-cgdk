@@ -47,6 +47,7 @@ pub trait WriteMessage: WriteBytesExt {
         self.write_f64::<B>(value.x())?;
         self.write_f64::<B>(value.y())?;
         self.write_f64::<B>(value.angle())?;
+        self.write_f64::<B>(value.factor())?;
         self.write_f64::<B>(value.max_speed())?;
         self.write_f64::<B>(value.max_angular_speed())?;
         self.write_vehicle_type(value.vehicle_type())?;

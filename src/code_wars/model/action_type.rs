@@ -10,5 +10,6 @@ pub enum ActionType {
     Disband = 6,
     Move = 7,
     Rotate = 8,
-    SetupVehicleProduction = 9,
+    Scale = 9,
+    SetupVehicleProduction = 10,
 }
