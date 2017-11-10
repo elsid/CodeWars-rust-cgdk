@@ -1,6 +1,6 @@
 use std::io;
 use byteorder::{ByteOrder, WriteBytesExt};
-use code_wars::model::{ActionType, Game, Move, PlayerContext, VehicleType};
+use code_wars::model::{ActionType, Move, VehicleType};
 use super::message::Message;
 
 pub trait WriteMessage: WriteBytesExt {
@@ -20,8 +20,8 @@ pub trait WriteMessage: WriteBytesExt {
             &Message::AuthenticationToken(ref v) => self.write_authentication_token::<B>(v),
             &Message::TeamSize(v) => self.write_i32::<B>(v),
             &Message::ProtocolVersion(v) => self.write_i32::<B>(v),
-            &Message::GameContext(ref v) => unimplemented!(),
-            &Message::PlayerContext(ref v) => unimplemented!(),
+            &Message::GameContext(ref _v) => unimplemented!(),
+            &Message::PlayerContext(ref _v) => unimplemented!(),
             &Message::MoveMessage(ref v) => self.write_move::<B>(v),
         }
     }
@@ -72,20 +72,14 @@ impl<W: WriteBytesExt> WriteMessage for W {}
 
 #[test]
 fn test_write_bool_false() {
-    use std::io::Cursor;
-    {
-        let mut buffer = vec![];
-        buffer.write_bool(false).unwrap();
-        assert_eq!(buffer, vec![0u8]);
-    }
+    let mut buffer = vec![];
+    buffer.write_bool(false).unwrap();
+    assert_eq!(buffer, vec![0u8]);
 }
 
 #[test]
 fn test_write_bool_true() {
-    use std::io::Cursor;
-    {
-        let mut buffer = vec![];
-        buffer.write_bool(true).unwrap();
-        assert_eq!(buffer, vec![1u8]);
-    }
+    let mut buffer = vec![];
+    buffer.write_bool(true).unwrap();
+    assert_eq!(buffer, vec![1u8]);
 }

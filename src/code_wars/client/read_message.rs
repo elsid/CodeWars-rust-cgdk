@@ -386,7 +386,6 @@ pub trait ReadMessage: ReadBytesExt {
     }
 
     fn read_vec_player<B: ByteOrder>(&mut self, cache: &mut HashMap<i64, Player>) -> io::Result<Vec<Player>> {
-        use std::io::{Error, ErrorKind};
         let len = self.read_i32::<B>()?;
         if len < 0 {
             Ok(cache.values().cloned().collect())
@@ -412,7 +411,6 @@ pub trait ReadMessage: ReadBytesExt {
     }
 
     fn read_vec_facility<B: ByteOrder>(&mut self, cache: &mut HashMap<i64, Facility>) -> io::Result<Vec<Facility>> {
-        use std::io::{Error, ErrorKind};
         let len = self.read_i32::<B>()?;
         if len < 0 {
             Ok(cache.values().cloned().collect())
@@ -448,7 +446,7 @@ pub trait ReadMessage: ReadBytesExt {
         Ok(self.read_u8()? != 0)
     }
 
-    fn read_vec<B: ByteOrder, T, F>(&mut self, mut read: F) -> io::Result<Vec<T>>
+    fn read_vec<B: ByteOrder, T, F>(&mut self, read: F) -> io::Result<Vec<T>>
             where F: FnMut(&mut Self) -> io::Result<T> {
         use std::io::{Error, ErrorKind};
         let len = self.read_i32::<B>()?;
