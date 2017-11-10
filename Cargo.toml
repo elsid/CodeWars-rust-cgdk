@@ -4,5 +4,5 @@ version = "0.1.0"
 authors = ["elsid <elsid.mail@gmail.com>"]
 
 [dependencies]
-argparse = "*"
-byteorder = "*"
+argparse = "0.2.1"
+byteorder = "1.1.0"
