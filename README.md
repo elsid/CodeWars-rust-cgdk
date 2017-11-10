@@ -9,3 +9,7 @@ Rust language package for CodeWars - [Russian AI Cup 2017](http://russianaicup.r
 ```(bash)
 cargo build --release
 ```
+
+## Usage
+
+Entry point for strategy is [here](src/code_wars/my_strategy.rs#L11).
