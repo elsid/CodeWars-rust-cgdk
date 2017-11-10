@@ -83,3 +83,70 @@ fn test_write_bool_true() {
     buffer.write_bool(true).unwrap();
     assert_eq!(buffer, vec![1u8]);
 }
+
+#[test]
+fn test_write_message_authentication_token() {
+    use byteorder::LittleEndian;
+    let message = Message::AuthenticationToken("foo".to_string());
+    let mut buffer = vec![];
+    buffer.write_message::<LittleEndian>(&message).unwrap();
+    assert_eq!(buffer, vec![
+        2u8,
+        3u8, 0u8, 0u8, 0u8,
+        102u8, 111u8, 111u8,
+    ]);
+}
+
+#[test]
+fn test_write_message_protocol_version() {
+    use byteorder::LittleEndian;
+    let message = Message::ProtocolVersion(42);
+    let mut buffer = vec![];
+    buffer.write_message::<LittleEndian>(&message).unwrap();
+    assert_eq!(buffer, vec![
+        4u8,
+        42u8, 0u8, 0u8, 0u8,
+    ]);
+}
+
+#[test]
+fn test_write_message_move() {
+    use byteorder::LittleEndian;
+    let mut move_ = Move::new();
+    move_
+        .set_action(ActionType::ClearAndSelect)
+        .set_group(1)
+        .set_left(2.0)
+        .set_top(3.0)
+        .set_right(4.0)
+        .set_bottom(5.0)
+        .set_x(6.0)
+        .set_y(7.0)
+        .set_angle(8.0)
+        .set_factor(9.0)
+        .set_max_speed(10.0)
+        .set_max_angular_speed(10.0)
+        .set_vehicle_type(VehicleType::Tank)
+        .set_facility_id(42);
+    let message = Message::MoveMessage(move_);
+    let mut buffer = vec![];
+    buffer.write_message::<LittleEndian>(&message).unwrap();
+    assert_eq!(buffer, vec![
+        7u8,
+        1u8,
+        1u8,
+        1u8, 0u8, 0u8, 0u8,
+        0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 64u8,
+        0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 8u8, 64u8,
+        0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 16u8, 64u8,
+        0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 20u8, 64u8,
+        0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 24u8, 64u8,
+        0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 28u8, 64u8,
+        0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 32u8, 64u8,
+        0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 34u8, 64u8,
+        0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 36u8, 64u8,
+        0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 36u8, 64u8,
+        5u8,
+        42u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8,
+    ]);
+}
