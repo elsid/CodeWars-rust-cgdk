@@ -89,4 +89,9 @@ pub struct Game {
     pub facility_capture_points_per_vehicle_per_tick: f64,
     pub facility_width: f64,
     pub facility_height: f64,
+    pub base_tactical_nuclear_strike_cooldown: i32,
+    pub tactical_nuclear_strike_cooldown_decrease_per_control_center: i32,
+    pub max_tactical_nuclear_strike_damage: f64,
+    pub tactical_nuclear_strike_radius: f64,
+    pub tactical_nuclear_strike_delay: i32,
 }

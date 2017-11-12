@@ -17,6 +17,7 @@ pub struct Move {
     max_angular_speed: f64,
     vehicle_type: VehicleType,
     facility_id: i64,
+    vehicle_id: i64,
 }
 
 impl Move {
@@ -36,6 +37,7 @@ impl Move {
             max_angular_speed: 0.0,
             vehicle_type: VehicleType::Unknown,
             facility_id: -1,
+            vehicle_id: -1,
         }
     }
 
@@ -162,6 +164,15 @@ impl Move {
 
     pub fn set_facility_id(&mut self, value: i64) -> &mut Self {
         self.facility_id = value;
+        self
+    }
+
+    pub fn vehicle_id(&self) -> i64 {
+        self.vehicle_id
+    }
+
+    pub fn set_vehicle_id(&mut self, value: i64) -> &mut Self {
+        self.vehicle_id = value;
         self
     }
 }

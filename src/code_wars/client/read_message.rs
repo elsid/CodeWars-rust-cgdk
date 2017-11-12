@@ -166,6 +166,11 @@ pub trait ReadMessage: ReadBytesExt {
             facility_capture_points_per_vehicle_per_tick: self.read_f64::<B>()?,
             facility_width: self.read_f64::<B>()?,
             facility_height: self.read_f64::<B>()?,
+            base_tactical_nuclear_strike_cooldown: self.read_i32::<B>()?,
+            tactical_nuclear_strike_cooldown_decrease_per_control_center: self.read_i32::<B>()?,
+            max_tactical_nuclear_strike_damage: self.read_f64::<B>()?,
+            tactical_nuclear_strike_radius: self.read_f64::<B>()?,
+            tactical_nuclear_strike_delay: self.read_i32::<B>()?,
         };
 
         Ok(result)
@@ -204,6 +209,11 @@ pub trait ReadMessage: ReadBytesExt {
             strategy_crashed: self.read_bool()?,
             score: self.read_i32::<B>()?,
             remaining_action_cooldown_ticks: self.read_i32::<B>()?,
+            remaining_nuclear_strike_cooldown_ticks: self.read_i32::<B>()?,
+            next_nuclear_strike_vehicle_id: self.read_i64::<B>()?,
+            next_nuclear_strike_tick_index: self.read_i32::<B>()?,
+            next_nuclear_strike_x: self.read_f64::<B>()?,
+            next_nuclear_strike_y: self.read_f64::<B>()?,
         };
 
         cache.insert(result.id, result.clone());
@@ -535,6 +545,11 @@ fn test_read_player() {
         strategy_crashed: false,
         score: 13,
         remaining_action_cooldown_ticks: 146,
+        remaining_nuclear_strike_cooldown_ticks: 43,
+        next_nuclear_strike_vehicle_id: 14,
+        next_nuclear_strike_tick_index: 147,
+        next_nuclear_strike_x: 1.0,
+        next_nuclear_strike_y: 2.0,
     };
     let mut cache = HashMap::new();
     let result = Cursor::new(vec![
@@ -544,6 +559,11 @@ fn test_read_player() {
         0u8,
         13u8, 0u8, 0u8, 0u8,
         146u8, 0u8, 0u8, 0u8,
+        43u8, 0u8, 0u8, 0u8,
+        14u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8,
+        147u8, 0u8, 0u8, 0u8,
+        0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 240u8, 63u8,
+        0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 64u8,
     ]).read_player::<LittleEndian>(&mut cache).unwrap();
     assert_eq!(result, player);
     assert_eq!(cache[&42i64], result);
@@ -559,6 +579,11 @@ fn test_read_cached_player() {
         strategy_crashed: false,
         score: 13,
         remaining_action_cooldown_ticks: 146,
+        remaining_nuclear_strike_cooldown_ticks: 43,
+        next_nuclear_strike_vehicle_id: 14,
+        next_nuclear_strike_tick_index: 147,
+        next_nuclear_strike_x: 1.0,
+        next_nuclear_strike_y: 2.0,
     };
     let mut cache = [(player.id, player.clone())].iter().cloned().collect();
     let result = Cursor::new(vec![
@@ -610,6 +635,11 @@ fn test_read_vec_player() {
         strategy_crashed: false,
         score: 13,
         remaining_action_cooldown_ticks: 146,
+        remaining_nuclear_strike_cooldown_ticks: 43,
+        next_nuclear_strike_vehicle_id: 14,
+        next_nuclear_strike_tick_index: 147,
+        next_nuclear_strike_x: 1.0,
+        next_nuclear_strike_y: 2.0,
     };
     let mut cache = [(player.id, player.clone())].iter().cloned().collect();
     let result = Cursor::new(vec![
@@ -630,6 +660,11 @@ fn test_read_cached_vec_player() {
         strategy_crashed: false,
         score: 13,
         remaining_action_cooldown_ticks: 146,
+        remaining_nuclear_strike_cooldown_ticks: 43,
+        next_nuclear_strike_vehicle_id: 14,
+        next_nuclear_strike_tick_index: 147,
+        next_nuclear_strike_x: 1.0,
+        next_nuclear_strike_y: 2.0,
     };
     let mut cache = [(player.id, player.clone())].iter().cloned().collect();
     let result = Cursor::new(vec![

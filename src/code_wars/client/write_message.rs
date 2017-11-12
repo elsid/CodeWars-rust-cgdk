@@ -52,6 +52,7 @@ pub trait WriteMessage: WriteBytesExt {
         self.write_f64::<B>(value.max_angular_speed())?;
         self.write_vehicle_type(value.vehicle_type())?;
         self.write_i64::<B>(value.facility_id())?;
+        self.write_i64::<B>(value.vehicle_id())?;
         Ok(())
     }
 
@@ -125,9 +126,10 @@ fn test_write_message_move() {
         .set_angle(8.0)
         .set_factor(9.0)
         .set_max_speed(10.0)
-        .set_max_angular_speed(10.0)
+        .set_max_angular_speed(11.0)
         .set_vehicle_type(VehicleType::Tank)
-        .set_facility_id(42);
+        .set_facility_id(12)
+        .set_vehicle_id(13);
     let message = Message::MoveMessage(move_);
     let mut buffer = vec![];
     buffer.write_message::<LittleEndian>(&message).unwrap();
@@ -145,8 +147,9 @@ fn test_write_message_move() {
         0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 32u8, 64u8,
         0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 34u8, 64u8,
         0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 36u8, 64u8,
-        0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 36u8, 64u8,
+        0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 38u8, 64u8,
         5u8,
-        42u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8,
+        12u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8,
+        13u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8,
     ]);
 }

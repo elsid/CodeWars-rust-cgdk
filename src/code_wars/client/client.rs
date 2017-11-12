@@ -1,7 +1,7 @@
 use std::io;
 use byteorder::ByteOrder;
 
-const PROTOCOL_VERSION: i32 = 2;
+const PROTOCOL_VERSION: i32 = 3;
 
 pub fn run<'r, B: ByteOrder>(host: &'r str, port: u16, token: String) -> io::Result<()> {
     use std::collections::HashMap;
