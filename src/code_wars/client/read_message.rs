@@ -245,33 +245,32 @@ pub trait ReadMessage: ReadBytesExt {
             return Err(Error::new(ErrorKind::Other, "ReadMessage::read_vehicle error: value is false"));
         }
 
-        let mut result = Vehicle::new();
-
-        result
-            .set_id(self.read_i64::<B>()?)
-            .set_x(self.read_f64::<B>()?)
-            .set_y(self.read_f64::<B>()?)
-            .set_radius(self.read_f64::<B>()?)
-            .set_player_id(self.read_i64::<B>()?)
-            .set_durability(self.read_i32::<B>()?)
-            .set_max_durability(self.read_i32::<B>()?)
-            .set_max_speed(self.read_f64::<B>()?)
-            .set_vision_range(self.read_f64::<B>()?)
-            .set_squared_vision_range(self.read_f64::<B>()?)
-            .set_ground_attack_range(self.read_f64::<B>()?)
-            .set_squared_ground_attack_range(self.read_f64::<B>()?)
-            .set_aerial_attack_range(self.read_f64::<B>()?)
-            .set_squared_aerial_attack_range(self.read_f64::<B>()?)
-            .set_ground_damage(self.read_i32::<B>()?)
-            .set_aerial_damage(self.read_i32::<B>()?)
-            .set_ground_defence(self.read_i32::<B>()?)
-            .set_aerial_defence(self.read_i32::<B>()?)
-            .set_attack_cooldown_ticks(self.read_i32::<B>()?)
-            .set_remaining_attack_cooldown_ticks(self.read_i32::<B>()?)
-            .set_type(self.read_vehicle_type()?)
-            .set_aerial(self.read_bool()?)
-            .set_selected(self.read_bool()?)
-            .set_groups(self.read_vec_i32::<B>()?);
+        let result = Vehicle {
+            id: self.read_i64::<B>()?,
+            x: self.read_f64::<B>()?,
+            y: self.read_f64::<B>()?,
+            radius: self.read_f64::<B>()?,
+            player_id: self.read_i64::<B>()?,
+            durability: self.read_i32::<B>()?,
+            max_durability: self.read_i32::<B>()?,
+            max_speed: self.read_f64::<B>()?,
+            vision_range: self.read_f64::<B>()?,
+            squared_vision_range: self.read_f64::<B>()?,
+            ground_attack_range: self.read_f64::<B>()?,
+            squared_ground_attack_range: self.read_f64::<B>()?,
+            aerial_attack_range: self.read_f64::<B>()?,
+            squared_aerial_attack_range: self.read_f64::<B>()?,
+            ground_damage: self.read_i32::<B>()?,
+            aerial_damage: self.read_i32::<B>()?,
+            ground_defence: self.read_i32::<B>()?,
+            aerial_defence: self.read_i32::<B>()?,
+            attack_cooldown_ticks: self.read_i32::<B>()?,
+            remaining_attack_cooldown_ticks: self.read_i32::<B>()?,
+            type_: self.read_vehicle_type()?,
+            aerial: self.read_bool()?,
+            selected: self.read_bool()?,
+            groups: self.read_vec_i32::<B>()?,
+        };
 
         Ok(result)
     }

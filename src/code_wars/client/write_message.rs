@@ -39,21 +39,21 @@ pub trait WriteMessage: WriteBytesExt {
 
     fn write_move<B: ByteOrder>(&mut self, value: &Move) -> io::Result<()> {
         self.write_bool(true)?;
-        self.write_action_type(value.action())?;
-        self.write_i32::<B>(value.group())?;
-        self.write_f64::<B>(value.left())?;
-        self.write_f64::<B>(value.top())?;
-        self.write_f64::<B>(value.right())?;
-        self.write_f64::<B>(value.bottom())?;
-        self.write_f64::<B>(value.x())?;
-        self.write_f64::<B>(value.y())?;
-        self.write_f64::<B>(value.angle())?;
-        self.write_f64::<B>(value.factor())?;
-        self.write_f64::<B>(value.max_speed())?;
-        self.write_f64::<B>(value.max_angular_speed())?;
-        self.write_vehicle_type(value.vehicle_type())?;
-        self.write_i64::<B>(value.facility_id())?;
-        self.write_i64::<B>(value.vehicle_id())?;
+        self.write_action_type(value.action)?;
+        self.write_i32::<B>(value.group)?;
+        self.write_f64::<B>(value.left)?;
+        self.write_f64::<B>(value.top)?;
+        self.write_f64::<B>(value.right)?;
+        self.write_f64::<B>(value.bottom)?;
+        self.write_f64::<B>(value.x)?;
+        self.write_f64::<B>(value.y)?;
+        self.write_f64::<B>(value.angle)?;
+        self.write_f64::<B>(value.factor)?;
+        self.write_f64::<B>(value.max_speed)?;
+        self.write_f64::<B>(value.max_angular_speed)?;
+        self.write_vehicle_type(value.vehicle_type)?;
+        self.write_i64::<B>(value.facility_id)?;
+        self.write_i64::<B>(value.vehicle_id)?;
         Ok(())
     }
 
@@ -114,23 +114,23 @@ fn test_write_message_protocol_version() {
 #[test]
 fn test_write_message_move() {
     use byteorder::LittleEndian;
-    let mut move_ = Move::new();
-    move_
-        .set_action(ActionType::ClearAndSelect)
-        .set_group(1)
-        .set_left(2.0)
-        .set_top(3.0)
-        .set_right(4.0)
-        .set_bottom(5.0)
-        .set_x(6.0)
-        .set_y(7.0)
-        .set_angle(8.0)
-        .set_factor(9.0)
-        .set_max_speed(10.0)
-        .set_max_angular_speed(11.0)
-        .set_vehicle_type(VehicleType::Tank)
-        .set_facility_id(12)
-        .set_vehicle_id(13);
+    let move_ = Move {
+        action: ActionType::ClearAndSelect,
+        group: 1,
+        left: 2.0,
+        top: 3.0,
+        right: 4.0,
+        bottom: 5.0,
+        x: 6.0,
+        y: 7.0,
+        angle: 8.0,
+        factor: 9.0,
+        max_speed: 10.0,
+        max_angular_speed: 11.0,
+        vehicle_type: VehicleType::Tank,
+        facility_id: 12,
+        vehicle_id: 13,
+    };
     let message = Message::MoveMessage(move_);
     let mut buffer = vec![];
     buffer.write_message::<LittleEndian>(&message).unwrap();
