@@ -1,7 +1,7 @@
 use super::circular_unit::CircularUnit;
 use super::unit::Unit;
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq, PartialOrd, Ord)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, PartialOrd, Ord, Hash)]
 pub enum VehicleType {
     Unknown = -1,
     None = 0,

@@ -1,4 +1,4 @@
-#[derive(Clone, Copy, Debug, Eq, PartialEq, PartialOrd, Ord)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, PartialOrd, Ord, Hash)]
 pub enum TerrainType {
     Unknown = -1,
     Plain = 0,

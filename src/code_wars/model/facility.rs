@@ -1,6 +1,6 @@
 use super::vehicle::VehicleType;
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq, PartialOrd, Ord)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, PartialOrd, Ord, Hash)]
 pub enum FacilityType {
     Unknown = -1,
     ControlCenter = 0,
