@@ -17,13 +17,14 @@ pub trait WriteMessage: WriteBytesExt {
         match value {
             &Message::UnknownMessage => unimplemented!(),
             &Message::GameOver => unimplemented!(),
-            &Message::AuthenticationToken(ref v) => self.write_authentication_token::<B>(v),
-            &Message::TeamSize(v) => self.write_i32::<B>(v),
-            &Message::ProtocolVersion(v) => self.write_i32::<B>(v),
+            &Message::AuthenticationToken(ref v) => self.write_authentication_token::<B>(v)?,
+            &Message::TeamSize(v) => self.write_i32::<B>(v)?,
+            &Message::ProtocolVersion(v) => self.write_i32::<B>(v)?,
             &Message::GameContext(ref _v) => unimplemented!(),
             &Message::PlayerContext(ref _v) => unimplemented!(),
-            &Message::MoveMessage(ref v) => self.write_move::<B>(v),
+            &Message::MoveMessage(ref v) => self.write_move::<B>(v)?,
         }
+        self.flush()
     }
 
     fn write_authentication_token<B: ByteOrder>(&mut self, value: &String) -> io::Result<()> {

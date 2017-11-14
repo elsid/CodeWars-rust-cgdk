@@ -21,14 +21,14 @@ pub trait ReadMessage: ReadBytesExt {
     fn read_message<B: ByteOrder>(&mut self, cache: &mut Cache) -> io::Result<Message> {
         use std::io::{Error, ErrorKind};
         match self.read_message_id()? {
-            0 => self.read_message_unknown_message(),
+            0 => unimplemented!(),
             1 => self.read_message_game_over(),
-            2 => self.read_message_authentication_token::<B>(),
+            2 => unimplemented!(),
             3 => self.read_message_team_size::<B>(),
-            4 => self.read_message_protocol_version::<B>(),
+            4 => unimplemented!(),
             5 => self.read_message_game_context::<B>(),
             6 => self.read_message_player_context::<B>(cache),
-            7 => self.read_message_moves_message(),
+            7 => unimplemented!(),
             v => Err(Error::new(ErrorKind::Other, format!("ReadMessage::read_message error: invalid message id: {}", v)))
         }
     }
@@ -37,24 +37,12 @@ pub trait ReadMessage: ReadBytesExt {
         self.read_i8()
     }
 
-    fn read_message_unknown_message(&mut self) -> io::Result<Message> {
-        unimplemented!()
-    }
-
     fn read_message_game_over(&mut self) -> io::Result<Message> {
         Ok(Message::GameOver)
     }
 
-    fn read_message_authentication_token<B: ByteOrder>(&mut self) -> io::Result<Message> {
-        Ok(Message::AuthenticationToken(self.read_string::<B>()?))
-    }
-
     fn read_message_team_size<B: ByteOrder>(&mut self) -> io::Result<Message> {
         Ok(Message::TeamSize(self.read_i32::<B>()?))
-    }
-
-    fn read_message_protocol_version<B: ByteOrder>(&mut self) -> io::Result<Message> {
-        Ok(Message::ProtocolVersion(self.read_i32::<B>()?))
     }
 
     fn read_message_game_context<B: ByteOrder>(&mut self) -> io::Result<Message> {
@@ -63,10 +51,6 @@ pub trait ReadMessage: ReadBytesExt {
 
     fn read_message_player_context<B: ByteOrder>(&mut self, cache: &mut Cache) -> io::Result<Message> {
         Ok(Message::PlayerContext(self.read_player_context::<B>(cache)?))
-    }
-
-    fn read_message_moves_message(&mut self) -> io::Result<Message> {
-        unimplemented!()
     }
 
     fn read_game<B: ByteOrder>(&mut self) -> io::Result<Game> {
@@ -386,15 +370,6 @@ pub trait ReadMessage: ReadBytesExt {
         }
     }
 
-    fn read_string<B: ByteOrder>(&mut self) -> io::Result<String> {
-        use std::io::{Error, ErrorKind};
-        let buf = self.read_vec_u8::<B>()?;
-        match String::from_utf8(buf) {
-            Ok(v) => Ok(v),
-            Err(v) => Err(Error::new(ErrorKind::Other, format!("ReadMessage::read_string error: {:?}", v))),
-        }
-    }
-
     fn read_vec_player<B: ByteOrder>(&mut self, cache: &mut HashMap<i64, Player>) -> io::Result<Vec<Player>> {
         let len = self.read_i32::<B>()?;
         if len < 0 {
@@ -441,17 +416,6 @@ pub trait ReadMessage: ReadBytesExt {
         self.read_vec::<B, _, _>(|s| s.read_i8())
     }
 
-    fn read_vec_u8<B: ByteOrder>(&mut self) -> io::Result<Vec<u8>> {
-        use std::io::{Error, ErrorKind};
-        let len = self.read_i32::<B>()?;
-        if len < 0 {
-            return Err(Error::new(ErrorKind::Other, format!("ReadMessage::read_vec_u8 error: len < 0, where len={}",  len)));
-        }
-        let mut result = vec![0; len as usize];
-        self.read_exact(&mut result)?;
-        Ok(result)
-    }
-
     fn read_bool(&mut self) -> io::Result<bool> {
         Ok(self.read_u8()? != 0)
     }
@@ -487,16 +451,6 @@ fn test_read_bool() {
 }
 
 #[test]
-fn test_read_vec_u8() {
-    use std::io::Cursor;
-    use byteorder::LittleEndian;
-    let result = Cursor::new(vec![2u8, 0u8, 0u8, 0u8, 42u8, 13u8])
-        .read_vec_u8::<LittleEndian>()
-        .unwrap();
-    assert_eq!(result, vec![42u8, 13u8]);
-}
-
-#[test]
 fn test_read_vec_i8() {
     use std::io::Cursor;
     use byteorder::LittleEndian;
@@ -514,16 +468,6 @@ fn test_read_vec_i32() {
         .read_vec_i32::<LittleEndian>()
         .unwrap();
     assert_eq!(result, vec![42i32, 13i32]);
-}
-
-#[test]
-fn test_read_string() {
-    use std::io::Cursor;
-    use byteorder::LittleEndian;
-    let result = Cursor::new(vec![2u8, 0u8, 0u8, 0u8, 'a' as u8, 'b' as u8])
-        .read_string::<LittleEndian>()
-        .unwrap();
-    assert_eq!(result, "ab".to_string());
 }
 
 #[test]
