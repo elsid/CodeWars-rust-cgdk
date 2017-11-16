@@ -1,6 +1,6 @@
 use std::io;
-use byteorder::{ByteOrder, WriteBytesExt};
 use code_wars::model::{ActionType, Move, VehicleType};
+use super::byteorder::{ByteOrder, WriteBytesExt};
 use super::message::Message;
 
 pub trait WriteMessage: WriteBytesExt {
@@ -88,7 +88,7 @@ fn test_write_bool_true() {
 
 #[test]
 fn test_write_message_authentication_token() {
-    use byteorder::LittleEndian;
+    use super::byteorder::LittleEndian;
     let message = Message::AuthenticationToken("foo".to_string());
     let mut buffer = vec![];
     buffer.write_message::<LittleEndian>(&message).unwrap();
@@ -101,7 +101,7 @@ fn test_write_message_authentication_token() {
 
 #[test]
 fn test_write_message_protocol_version() {
-    use byteorder::LittleEndian;
+    use super::byteorder::LittleEndian;
     let message = Message::ProtocolVersion(42);
     let mut buffer = vec![];
     buffer.write_message::<LittleEndian>(&message).unwrap();
@@ -113,7 +113,7 @@ fn test_write_message_protocol_version() {
 
 #[test]
 fn test_write_message_move() {
-    use byteorder::LittleEndian;
+    use super::byteorder::LittleEndian;
     let move_ = Move {
         action: ActionType::ClearAndSelect,
         group: 1,

@@ -3,9 +3,6 @@ name = "CodeWars-rust-cgdk"
 version = "0.1.0"
 authors = ["elsid <elsid.mail@gmail.com>"]
 
-[dependencies]
-byteorder = "1.1.0"
-
 [[bin]]
 name = "code_wars"
 path = "src/code_wars/main.rs"

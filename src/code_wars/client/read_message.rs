@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 use std::io;
-use byteorder::{ByteOrder, ReadBytesExt};
 use code_wars::model::{
     Facility,
     FacilityType,
@@ -14,6 +13,7 @@ use code_wars::model::{
     WeatherType,
     World,
 };
+use super::byteorder::{ByteOrder, ReadBytesExt};
 use super::message::Message;
 use super::cache::Cache;
 
@@ -452,7 +452,7 @@ fn test_read_bool() {
 #[test]
 fn test_read_vec_i8() {
     use std::io::Cursor;
-    use byteorder::LittleEndian;
+    use super::byteorder::LittleEndian;
     let result = Cursor::new(vec![2u8, 0u8, 0u8, 0u8, 42u8, -42i8 as u8])
         .read_vec_i8::<LittleEndian>()
         .unwrap();
@@ -462,7 +462,7 @@ fn test_read_vec_i8() {
 #[test]
 fn test_read_vec_i32() {
     use std::io::Cursor;
-    use byteorder::LittleEndian;
+    use super::byteorder::LittleEndian;
     let result = Cursor::new(vec![2u8, 0u8, 0u8, 0u8, 42u8, 0u8, 0u8, 0u8, 13u8, 0u8, 0u8, 0u8])
         .read_vec_i32::<LittleEndian>()
         .unwrap();
@@ -481,7 +481,7 @@ fn test_read_facility_type() {
 #[test]
 fn test_read_player() {
     use std::io::Cursor;
-    use byteorder::LittleEndian;
+    use super::byteorder::LittleEndian;
     let player = Player {
         id: 42,
         me: true,
@@ -515,7 +515,7 @@ fn test_read_player() {
 #[test]
 fn test_read_cached_player() {
     use std::io::Cursor;
-    use byteorder::LittleEndian;
+    use super::byteorder::LittleEndian;
     let player = Player {
         id: 42,
         me: true,
@@ -539,7 +539,7 @@ fn test_read_cached_player() {
 #[test]
 fn test_read_message_game_over() {
     use std::io::Cursor;
-    use byteorder::LittleEndian;
+    use super::byteorder::LittleEndian;
     let mut cache = Cache {
         facilities: HashMap::new(),
         players: HashMap::new(),
@@ -555,7 +555,7 @@ fn test_read_message_game_over() {
 #[test]
 fn test_read_message_team_size() {
     use std::io::Cursor;
-    use byteorder::LittleEndian;
+    use super::byteorder::LittleEndian;
     let mut cache = Cache {
         facilities: HashMap::new(),
         players: HashMap::new(),
@@ -571,7 +571,7 @@ fn test_read_message_team_size() {
 #[test]
 fn test_read_vec_player() {
     use std::io::Cursor;
-    use byteorder::LittleEndian;
+    use super::byteorder::LittleEndian;
     let player = Player {
         id: 42,
         me: true,
@@ -596,7 +596,7 @@ fn test_read_vec_player() {
 #[test]
 fn test_read_cached_vec_player() {
     use std::io::Cursor;
-    use byteorder::LittleEndian;
+    use super::byteorder::LittleEndian;
     let player = Player {
         id: 42,
         me: true,

@@ -1,4 +1,4 @@
-extern crate byteorder;
+extern crate core;
 
 #[path = "mod.rs"]
 mod code_wars;
@@ -15,8 +15,7 @@ struct Args {
 fn main() {
     use std::io::{stderr, Write};
     use std::process::exit;
-    use byteorder::LittleEndian;
-    use code_wars::client::run;
+    use code_wars::client::{LittleEndian, run};
 
     let args = parse_args();
     match run::<LittleEndian>(&args.host[..], args.port, args.token) {

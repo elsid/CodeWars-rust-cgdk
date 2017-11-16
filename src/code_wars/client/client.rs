@@ -1,5 +1,5 @@
 use std::io;
-use byteorder::ByteOrder;
+use code_wars::client::byteorder::ByteOrder;
 
 const PROTOCOL_VERSION: i32 = 3;
 
