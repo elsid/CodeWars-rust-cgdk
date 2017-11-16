@@ -1,2 +1,8 @@
 language: rust
 sudo: false
+script:
+- cargo build --verbose
+- cargo test --verbose
+- ./compile-rust.sh
+- cat compilation.log
+- file MyStrategy

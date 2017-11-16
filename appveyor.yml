@@ -21,3 +21,6 @@ build: false
 test_script:
 - cargo build --verbose
 - cargo test --verbose
+- compile-rust.bat
+- type compilation.log
+- dir MyStrategy.exe

@@ -6,10 +6,35 @@ Rust language package for CodeWars - [Russian AI Cup 2017](http://russianaicup.r
 
 ## Build
 
-```(bash)
-cargo build --release
+For linux, windows and macos:
+```
+cargo build
+```
+
+or for linux and macos:
+```bash
+./compile-rust.sh
+```
+
+or for windows:
+```
+compile-rust.bat
 ```
 
 ## Usage
 
-Entry point for strategy is [here](src/code_wars/my_strategy.rs#L11).
+Write your own strategy in [src/my_strategy.rs](src/my_strategy.rs).
+
+To import modules into my_strategy.rs use path attribute:
+```rust
+#[path = "some_module.rs"]
+mod some_module;
+
+pub struct MyStrategy {}
+```
+
+Run binary with exactly 3 arguments (host, port, token) or without arguments to use defaults:
+```bash
+./MyStrategy 127.0.0.1 31001 0000000000000000
+./MyStrategy
+```
