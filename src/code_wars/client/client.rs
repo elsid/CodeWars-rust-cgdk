@@ -8,7 +8,7 @@ pub fn run<'r, B: ByteOrder>(host: &'r str, port: u16, token: String) -> io::Res
     use std::io::{BufReader, BufWriter, Error, ErrorKind};
     use std::net::TcpStream;
     use code_wars::model::Move;
-    use code_wars::MyStrategy;
+    use my_strategy::MyStrategy;
     use super::cache::Cache;
     use super::message::Message;
     use super::read_message::ReadMessage;

@@ -1,4 +1,4 @@
-use super::model::{ActionType, Game, Move, Player, World};
+use code_wars::model::{ActionType, Game, Move, Player, World};
 
 #[derive(Clone, Debug)]
 pub struct MyStrategy {}

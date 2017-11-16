@@ -1,7 +1,11 @@
 extern crate argparse;
 extern crate byteorder;
 
+#[path = "mod.rs"]
 mod code_wars;
+
+#[path = "../my_strategy.rs"]
+mod my_strategy;
 
 struct Args {
     host: String,
