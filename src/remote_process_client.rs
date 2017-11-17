@@ -4,7 +4,7 @@ use core::fmt::Debug;
 use core::hash::Hash;
 use core::mem::transmute;
 use core::ptr::copy_nonoverlapping;
-use code_wars::model::{
+use model::{
     ActionType,
     Facility,
     FacilityType,
@@ -26,7 +26,7 @@ pub fn run<'r, B: ByteOrder>(host: &'r str, port: u16, token: String) -> io::Res
     use std::collections::HashMap;
     use std::io::{BufReader, BufWriter, Error, ErrorKind};
     use std::net::TcpStream;
-    use code_wars::model::Move;
+    use model::Move;
     use my_strategy::MyStrategy;
 
     let stream = TcpStream::connect((host, port))?;

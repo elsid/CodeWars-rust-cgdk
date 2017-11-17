@@ -1,10 +1,8 @@
 extern crate core;
 
-#[path = "mod.rs"]
-mod code_wars;
-
-#[path = "../my_strategy.rs"]
+mod model;
 mod my_strategy;
+mod remote_process_client;
 
 struct Args {
     host: String,
@@ -15,7 +13,7 @@ struct Args {
 fn main() {
     use std::io::{stderr, Write};
     use std::process::exit;
-    use code_wars::client::{LittleEndian, run};
+    use remote_process_client::{LittleEndian, run};
 
     let args = parse_args();
     match run::<LittleEndian>(&args.host[..], args.port, args.token) {

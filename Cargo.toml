@@ -5,4 +5,4 @@ authors = ["elsid <elsid.mail@gmail.com>"]
 
 [[bin]]
 name = "code_wars"
-path = "src/code_wars/runner.rs"
+path = "src/runner.rs"

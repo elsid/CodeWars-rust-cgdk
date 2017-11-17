@@ -1,4 +1,4 @@
-use code_wars::model::{ActionType, Game, Move, Player, World};
+use model::{ActionType, Game, Move, Player, World};
 
 pub struct MyStrategy {}
 
