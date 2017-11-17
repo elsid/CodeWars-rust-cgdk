@@ -1,3 +1,3 @@
 #!/bin/sh
 
-rustc -O src/code_wars/main.rs -o MyStrategy 2> compilation.log
+rustc -O src/code_wars/runner.rs -o MyStrategy 2> compilation.log
