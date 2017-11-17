@@ -28,6 +28,7 @@ pub fn run<'r, B: ByteOrder>(host: &'r str, port: u16, token: String) -> io::Res
     use std::net::TcpStream;
     use model::Move;
     use my_strategy::MyStrategy;
+    use strategy::Strategy;
 
     let stream = TcpStream::connect((host, port))?;
 
@@ -61,7 +62,7 @@ pub fn run<'r, B: ByteOrder>(host: &'r str, port: u16, token: String) -> io::Res
         v => return Err(Error::new(ErrorKind::Other, format!("Expected Message::GameContext, but received: {:?}", v))),
     };
 
-    let mut strategy = MyStrategy::new();
+    let mut strategy = MyStrategy::default();
 
     loop {
         let player_context = match reader.read_message::<B>(&mut cache)? {

@@ -1,13 +1,11 @@
 use model::{ActionType, Game, Move, Player, World};
+use strategy::Strategy;
 
-pub struct MyStrategy {}
+#[derive(Default)]
+pub struct MyStrategy;
 
-impl MyStrategy {
-    pub fn new() -> Self {
-        MyStrategy {}
-    }
-
-    pub fn move_(&mut self, me: &Player, world: &World, game: &Game, move_: &mut Move) {
+impl Strategy for MyStrategy {
+    fn move_(&mut self, me: &Player, world: &World, game: &Game, move_: &mut Move) {
         if world.tick_index == 0 {
             move_.action = ActionType::ClearAndSelect;
             move_.right = world.width;

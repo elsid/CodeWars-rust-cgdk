@@ -3,6 +3,7 @@ extern crate core;
 mod model;
 mod my_strategy;
 mod remote_process_client;
+mod strategy;
 
 struct Args {
     host: String,
