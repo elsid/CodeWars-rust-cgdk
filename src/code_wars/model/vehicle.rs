@@ -1,16 +1,6 @@
 use super::circular_unit::CircularUnit;
 use super::unit::Unit;
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq, PartialOrd, Ord, Hash)]
-pub enum VehicleType {
-    Unknown = -1,
-    None = 0,
-    Arrv = 1,
-    Fighter = 2,
-    Helicopter = 3,
-    Ifv = 4,
-    Tank = 5,
-}
+use super::vehicle_type::VehicleType;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Vehicle {

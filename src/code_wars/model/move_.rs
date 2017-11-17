@@ -1,5 +1,5 @@
 use super::action_type::ActionType;
-use super::vehicle::VehicleType;
+use super::vehicle_type::VehicleType;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Move {

@@ -1,11 +1,5 @@
-use super::vehicle::VehicleType;
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq, PartialOrd, Ord, Hash)]
-pub enum FacilityType {
-    Unknown = -1,
-    ControlCenter = 0,
-    VehicleFactory = 1,
-}
+use super::facility_type::FacilityType;
+use super::vehicle_type::VehicleType;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Facility {
