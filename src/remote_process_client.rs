@@ -422,12 +422,11 @@ pub trait ReadMessage: ReadBytesExt {
         use std::io::{Error, ErrorKind};
         match self.read_i8()? {
             -1 => Ok(VehicleType::Unknown),
-            0 => Ok(VehicleType::None),
-            1 => Ok(VehicleType::Arrv),
-            2 => Ok(VehicleType::Fighter),
-            3 => Ok(VehicleType::Helicopter),
-            4 => Ok(VehicleType::Ifv),
-            5 => Ok(VehicleType::Tank),
+            0 => Ok(VehicleType::Arrv),
+            1 => Ok(VehicleType::Fighter),
+            2 => Ok(VehicleType::Helicopter),
+            3 => Ok(VehicleType::Ifv),
+            4 => Ok(VehicleType::Tank),
             v => Err(Error::new(ErrorKind::Other, format!("ReadMessage::read_vehicle_type error: invalid VehicleType value: {}", v))),
         }
     }
@@ -1037,7 +1036,7 @@ fn test_write_message_move() {
         0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 34u8, 64u8,
         0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 36u8, 64u8,
         0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 38u8, 64u8,
-        5u8,
+        4u8,
         12u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8,
         13u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8,
     ]);
