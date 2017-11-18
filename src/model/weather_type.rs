@@ -5,3 +5,9 @@ pub enum WeatherType {
     Cloud = 1,
     Rain = 2,
 }
+
+impl Default for WeatherType {
+    fn default() -> Self {
+        WeatherType::Unknown
+    }
+}

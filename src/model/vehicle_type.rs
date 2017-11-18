@@ -8,3 +8,9 @@ pub enum VehicleType {
     Ifv = 4,
     Tank = 5,
 }
+
+impl Default for VehicleType {
+    fn default() -> Self {
+        VehicleType::Unknown
+    }
+}
