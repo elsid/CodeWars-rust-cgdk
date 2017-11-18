@@ -19,6 +19,7 @@ pub struct World {
     pub facilities: Vec<Facility>,
 }
 
+#[allow(dead_code)]
 impl World {
     pub fn get_my_player(&self) -> Option<&Player> {
         self.players.iter().find(|v| v.me)

@@ -90,6 +90,7 @@ pub struct Cache {
     pub weather_by_cell_x_y: Vec<Vec<WeatherType>>,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, PartialEq)]
 pub enum Message {
     UnknownMessage,

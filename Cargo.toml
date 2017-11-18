@@ -1,5 +1,5 @@
 [package]
-name = "CodeWars-rust-cgdk"
+name = "code_wars_rust_cgdk"
 version = "0.1.0"
 authors = ["elsid <elsid.mail@gmail.com>"]
 
