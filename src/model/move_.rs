@@ -20,8 +20,8 @@ pub struct Move {
     pub vehicle_id: i64,
 }
 
-impl Move {
-    pub fn new() -> Self {
+impl Default for Move {
+    fn default() -> Self {
         Move {
             action: ActionType::Unknown,
             group: 0,

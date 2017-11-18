@@ -75,7 +75,7 @@ pub fn run<'r, B: ByteOrder>(host: &'r str, port: u16, token: String) -> io::Res
                                                 received: {:?}", v)))
         };
 
-        let mut move_ = Move::new();
+        let mut move_ = Move::default();
         strategy.move_(&player_context.player, &player_context.world, &game, &mut move_);
         writer.write_message::<B>(&Message::MoveMessage(move_))?;
     }
