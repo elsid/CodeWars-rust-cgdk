@@ -23,7 +23,15 @@ compile-rust.bat
 
 ## Usage
 
-Write your own strategy in [src/my_strategy/mod.rs](src/my_strategy/mod.rs).
+Write your own strategy in [src/my_strategy.rs](src/my_strategy.rs).
+
+To import modules into my_strategy.rs use path attribute:
+```rust
+#[path = "some_module.rs"]
+mod some_module;
+
+pub struct MyStrategy {}
+```
 
 Run binary with exactly 3 arguments (host, port, token) or without arguments to use defaults:
 ```bash
