@@ -15,9 +15,3 @@ pub enum ActionType {
     SetupVehicleProduction = 10,
     TacticalNuclearStrike = 11,
 }
-
-impl Default for ActionType {
-    fn default() -> Self {
-        ActionType::Unknown
-    }
-}

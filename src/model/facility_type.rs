@@ -4,9 +4,3 @@ pub enum FacilityType {
     ControlCenter = 0,
     VehicleFactory = 1,
 }
-
-impl Default for FacilityType {
-    fn default() -> Self {
-        FacilityType::Unknown
-    }
-}

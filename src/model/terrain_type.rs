@@ -5,9 +5,3 @@ pub enum TerrainType {
     Swamp = 1,
     Forest = 2,
 }
-
-impl Default for TerrainType {
-    fn default() -> Self {
-        TerrainType::Unknown
-    }
-}
