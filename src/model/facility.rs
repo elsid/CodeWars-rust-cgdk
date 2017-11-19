@@ -4,7 +4,7 @@ use super::vehicle_type::VehicleType;
 #[derive(Clone, Debug, PartialEq)]
 pub struct Facility {
     pub id: i64,
-    pub type_: Option<FacilityType>,
+    pub kind: Option<FacilityType>,
     pub owner_player_id: i64,
     pub left: f64,
     pub top: f64,

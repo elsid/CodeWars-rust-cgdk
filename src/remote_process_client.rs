@@ -367,7 +367,7 @@ pub trait ReadMessage: ReadBytesExt {
             aerial_defence: self.read_i32::<B>()?,
             attack_cooldown_ticks: self.read_i32::<B>()?,
             remaining_attack_cooldown_ticks: self.read_i32::<B>()?,
-            type_: self.read_vehicle_type()?,
+            kind: self.read_vehicle_type()?,
             aerial: self.read_bool()?,
             selected: self.read_bool()?,
             groups: self.read_vec_i32::<B>()?,
@@ -445,7 +445,7 @@ pub trait ReadMessage: ReadBytesExt {
 
         let result = Facility {
             id: self.read_i64::<B>()?,
-            type_: self.read_facility_type()?,
+            kind: self.read_facility_type()?,
             owner_player_id: self.read_i64::<B>()?,
             left: self.read_f64::<B>()?,
             top: self.read_f64::<B>()?,
