@@ -7,6 +7,7 @@ mod strategy;
 
 use std::io;
 use remote_process_client::RemoteProcessClient;
+use strategy::Strategy;
 
 struct Args {
     host: String,
@@ -17,6 +18,7 @@ struct Args {
 fn main() {
     use std::io::{stderr, Write};
     use std::process::exit;
+    use my_strategy::MyStrategy;
 
     let args = parse_args();
 
@@ -30,7 +32,7 @@ fn main() {
 
     let mut runner = Runner::new(client, args.token);
 
-    match runner.run() {
+    match runner.run::<MyStrategy>() {
         Ok(_) => (),
         Err(v) => {
             write!(&mut stderr(), "{:?}\n", v).unwrap();
@@ -65,16 +67,14 @@ impl Runner {
         Runner { client, token }
     }
 
-    pub fn run(&mut self) -> io::Result<()> {
-        use my_strategy::MyStrategy;
-        use strategy::Strategy;
+    pub fn run<T: Strategy>(&mut self) -> io::Result<()> {
         use model::Action;
 
         self.client.write_authentication_token_message(self.token.clone())?;
         self.client.write_protocol_version_message()?;
         self.client.read_team_size_message()?;
         let game = self.client.read_game_message()?;
-        let mut strategy = MyStrategy::default();
+        let mut strategy = T::default();
 
         while let Some(player_context) = self.client.read_player_context_message()? {
             let mut action = Action::default();
