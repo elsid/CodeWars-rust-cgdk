@@ -1,5 +1,7 @@
 use std::collections::HashMap;
+use std::io::{BufReader, BufWriter, Error, ErrorKind};
 use std::io;
+use std::net::TcpStream;
 use core::fmt::Debug;
 use core::hash::Hash;
 use core::mem::transmute;
@@ -22,77 +24,25 @@ use model::{
 
 const PROTOCOL_VERSION: i32 = 3;
 
-pub fn run<'r, B: ByteOrder>(host: &'r str, port: u16, token: String) -> io::Result<()> {
-    use std::collections::HashMap;
-    use std::io::{BufReader, BufWriter, Error, ErrorKind};
-    use std::net::TcpStream;
-    use model::Action;
-    use my_strategy::MyStrategy;
-    use strategy::Strategy;
-
-    let stream = TcpStream::connect((host, port))?;
-
-    stream.set_nodelay(true)?;
-
-    let mut writer = BufWriter::new(stream.try_clone()?);
-
-    writer.write_message::<B>(&Message::AuthenticationToken(token.clone()))?;
-    writer.write_message::<B>(&Message::ProtocolVersion(PROTOCOL_VERSION))?;
-
-    let mut cache = Cache {
-        facilities: HashMap::new(),
-        players: HashMap::new(),
-        terrain_by_cell_x_y: vec![],
-        weather_by_cell_x_y: vec![],
-    };
-
-    let mut reader = BufReader::new(stream);
-
-    let team_size = match reader.read_message::<B>(&mut cache)? {
-        Message::TeamSize(v) => v,
-        v => return Err(Error::new(ErrorKind::Other, format!("Expected Message::TeamSize, but received: {:?}", v))),
-    };
-
-    if team_size < 0 {
-        return Err(Error::new(ErrorKind::Other, format!("Team size < 0: {}", team_size)));
-    }
-
-    let game = match reader.read_message::<B>(&mut cache)? {
-        Message::GameContext(v) => v,
-        v => return Err(Error::new(ErrorKind::Other, format!("Expected Message::GameContext, but received: {:?}", v))),
-    };
-
-    let mut strategy = MyStrategy::default();
-
-    loop {
-        let player_context = match reader.read_message::<B>(&mut cache)? {
-            Message::GameOver => break,
-            Message::PlayerContext(v) => v,
-            v => return Err(Error::new(ErrorKind::Other,
-                                       format!("Expected Message::GameOver, \
-                                                Message::PlayerContext or \
-                                                Message::PlayerContextWithoutTrees, but \
-                                                received: {:?}", v)))
-        };
-
-        let mut action = Action::default();
-        strategy.act(&player_context.player, &player_context.world, &game, &mut action);
-        writer.write_message::<B>(&Message::ActionMessage(action))?;
-    }
-
-    Ok(())
+pub struct RemoteProcessClient {
+    cache: Cache,
+    reader: BufReader<TcpStream>,
+    writer: BufWriter<TcpStream>,
 }
 
-pub struct Cache {
-    pub facilities: HashMap<i64, Facility>,
-    pub players: HashMap<i64, Player>,
+#[derive(Default)]
+struct Cache {
+    pub facilities: Vec<Facility>,
+    pub players: Vec<Player>,
+    pub facilities_by_id: HashMap<i64, Facility>,
+    pub players_by_id: HashMap<i64, Player>,
     pub terrain_by_cell_x_y: Vec<Vec<Option<TerrainType>>>,
     pub weather_by_cell_x_y: Vec<Vec<Option<WeatherType>>>,
 }
 
 #[allow(dead_code)]
 #[derive(Debug, PartialEq)]
-pub enum Message {
+enum Message {
     UnknownMessage,
     GameOver,
     AuthenticationToken(String),
@@ -103,433 +53,437 @@ pub enum Message {
     ActionMessage(Action),
 }
 
-impl Message {
-    pub fn get_id(&self) -> i8 {
-        match *self {
-            Message::UnknownMessage => 0,
-            Message::GameOver => 1,
-            Message::AuthenticationToken(_) => 2,
-            Message::TeamSize(_) => 3,
-            Message::ProtocolVersion(_) => 4,
-            Message::GameContext(_) => 5,
-            Message::PlayerContext(_) => 6,
-            Message::ActionMessage(_) => 7,
+macro_rules! read_option_enum_impl {
+    ($function:ident, $name:ident, $error_format:tt, $($variant:ident),*) => {
+        fn $function(&mut self) -> io::Result<Option<$name>> {
+            let value = self.read_i8()?;
+
+            if value < 0 {
+                return Ok(None)
+            }
+
+            $(if value == $name::$variant as i8 {
+                Ok(Some($name::$variant))
+            } else)* {
+                Err(Error::new(ErrorKind::Other, format!($error_format, value)))
+            }
         }
-    }
+    };
 }
 
-pub trait ReadMessage: ReadBytesExt {
-    fn read_message<B: ByteOrder>(&mut self, cache: &mut Cache) -> io::Result<Message> {
-        use std::io::{Error, ErrorKind};
-        match self.read_message_id()? {
-            0 => unimplemented!(),
-            1 => self.read_message_game_over(),
-            2 => unimplemented!(),
-            3 => self.read_message_team_size::<B>(),
-            4 => unimplemented!(),
-            5 => self.read_message_game_context::<B>(),
-            6 => self.read_message_player_context::<B>(cache),
-            7 => unimplemented!(),
-            v => Err(Error::new(ErrorKind::Other, format!("ReadMessage::read_message error: invalid message id: {}", v)))
+impl RemoteProcessClient {
+    pub fn connect<'r>(host: &'r str, port: u16) -> io::Result<(Self)> {
+        let stream = TcpStream::connect((host, port))?;
+        stream.set_nodelay(true)?;
+        let result = RemoteProcessClient {
+            cache: Cache::default(),
+            reader: BufReader::new(stream.try_clone()?),
+            writer: BufWriter::new(stream),
+        };
+        Ok(result)
+    }
+
+    pub fn write_authentication_token_message(&mut self, token: String) -> io::Result<()> {
+        self.write_message(&Message::AuthenticationToken(token.clone()))
+    }
+
+    pub fn write_protocol_version_message(&mut self) -> io::Result<()> {
+        self.write_message(&Message::ProtocolVersion(PROTOCOL_VERSION))
+    }
+
+    pub fn read_team_size_message(&mut self) -> io::Result<i32> {
+        match self.read_message()? {
+            Message::TeamSize(v) => Ok(v),
+            v => Err(Error::new(ErrorKind::Other,
+                                format!("Expected Message::TeamSize, but received: {:?}", v))),
         }
     }
 
-    fn read_message_id(&mut self) -> io::Result<i8> {
-        self.read_i8()
+    pub fn read_game_message(&mut self) -> io::Result<Game> {
+        match self.read_message()? {
+            Message::GameContext(v) => Ok(v),
+            v => Err(Error::new(ErrorKind::Other,
+                                format!("Expected Message::GameContext, but received: {:?}", v))),
+        }
     }
 
-    fn read_message_game_over(&mut self) -> io::Result<Message> {
-        Ok(Message::GameOver)
+    pub fn read_player_context_message(&mut self) -> io::Result<Option<PlayerContext>> {
+        match self.read_message()? {
+            Message::GameOver => Ok(None),
+            Message::PlayerContext(v) => Ok(Some(v)),
+            v => return Err(Error::new(ErrorKind::Other,
+                                       format!("Expected Message::GameOver, \
+                                            Message::PlayerContext or \
+                                            Message::PlayerContextWithoutTrees, but \
+                                            received: {:?}", v)))
+        }
     }
 
-    fn read_message_team_size<B: ByteOrder>(&mut self) -> io::Result<Message> {
-        Ok(Message::TeamSize(self.read_i32::<B>()?))
+    pub fn write_action_message(&mut self, action: Action) -> io::Result<()> {
+        self.write_message(&Message::ActionMessage(action))
     }
 
-    fn read_message_game_context<B: ByteOrder>(&mut self) -> io::Result<Message> {
-        Ok(Message::GameContext(self.read_game::<B>()?))
+    fn read_message(&mut self) -> io::Result<Message> {
+        use std::io::{Error, ErrorKind};
+        match self.read_i8()? {
+            0 => unimplemented!(),
+            1 => Ok(Message::GameOver),
+            2 => unimplemented!(),
+            3 => Ok(Message::TeamSize(self.read_i32()?)),
+            4 => unimplemented!(),
+            5 => Ok(Message::GameContext(self.read_game()?)),
+            6 => Ok(Message::PlayerContext(self.read_player_context()?)),
+            7 => unimplemented!(),
+            v => Err(Error::new(ErrorKind::Other,
+                                format!("RemoteProcessClient::read_message error: invalid message id: {}", v)))
+        }
     }
 
-    fn read_message_player_context<B: ByteOrder>(&mut self, cache: &mut Cache) -> io::Result<Message> {
-        Ok(Message::PlayerContext(self.read_player_context::<B>(cache)?))
-    }
-
-    fn read_game<B: ByteOrder>(&mut self) -> io::Result<Game> {
+    fn read_game(&mut self) -> io::Result<Game> {
         use std::io::{Error, ErrorKind};
 
         if !self.read_bool()? {
-            return Err(Error::new(ErrorKind::Other, "ReadMessage::read_game error: value is false"));
+            return Err(Error::new(ErrorKind::Other,
+                                  "RemoteProcessClient::read_game error: value is false"));
         }
 
         let result = Game {
-            random_seed: self.read_i64::<B>()?,
-            tick_count: self.read_i32::<B>()?,
-            world_width: self.read_f64::<B>()?,
-            world_height: self.read_f64::<B>()?,
+            random_seed: self.read_i64()?,
+            tick_count: self.read_i32()?,
+            world_width: self.read_f64()?,
+            world_height: self.read_f64()?,
             fog_of_war_enabled: self.read_bool()?,
-            victory_score: self.read_i32::<B>()?,
-            facility_capture_score: self.read_i32::<B>()?,
-            vehicle_elimination_score: self.read_i32::<B>()?,
-            action_detection_interval: self.read_i32::<B>()?,
-            base_action_count: self.read_i32::<B>()?,
-            additional_action_count_per_control_center: self.read_i32::<B>()?,
-            max_unit_group: self.read_i32::<B>()?,
-            terrain_weather_map_column_count: self.read_i32::<B>()?,
-            terrain_weather_map_row_count: self.read_i32::<B>()?,
-            plain_terrain_vision_factor: self.read_f64::<B>()?,
-            plain_terrain_stealth_factor: self.read_f64::<B>()?,
-            plain_terrain_speed_factor: self.read_f64::<B>()?,
-            swamp_terrain_vision_factor: self.read_f64::<B>()?,
-            swamp_terrain_stealth_factor: self.read_f64::<B>()?,
-            swamp_terrain_speed_factor: self.read_f64::<B>()?,
-            forest_terrain_vision_factor: self.read_f64::<B>()?,
-            forest_terrain_stealth_factor: self.read_f64::<B>()?,
-            forest_terrain_speed_factor: self.read_f64::<B>()?,
-            clear_weather_vision_factor: self.read_f64::<B>()?,
-            clear_weather_stealth_factor: self.read_f64::<B>()?,
-            clear_weather_speed_factor: self.read_f64::<B>()?,
-            cloud_weather_vision_factor: self.read_f64::<B>()?,
-            cloud_weather_stealth_factor: self.read_f64::<B>()?,
-            cloud_weather_speed_factor: self.read_f64::<B>()?,
-            rain_weather_vision_factor: self.read_f64::<B>()?,
-            rain_weather_stealth_factor: self.read_f64::<B>()?,
-            rain_weather_speed_factor: self.read_f64::<B>()?,
-            vehicle_radius: self.read_f64::<B>()?,
-            tank_durability: self.read_i32::<B>()?,
-            tank_speed: self.read_f64::<B>()?,
-            tank_vision_range: self.read_f64::<B>()?,
-            tank_ground_attack_range: self.read_f64::<B>()?,
-            tank_aerial_attack_range: self.read_f64::<B>()?,
-            tank_ground_damage: self.read_i32::<B>()?,
-            tank_aerial_damage: self.read_i32::<B>()?,
-            tank_ground_defence: self.read_i32::<B>()?,
-            tank_aerial_defence: self.read_i32::<B>()?,
-            tank_attack_cooldown_ticks: self.read_i32::<B>()?,
-            tank_production_cost: self.read_i32::<B>()?,
-            ifv_durability: self.read_i32::<B>()?,
-            ifv_speed: self.read_f64::<B>()?,
-            ifv_vision_range: self.read_f64::<B>()?,
-            ifv_ground_attack_range: self.read_f64::<B>()?,
-            ifv_aerial_attack_range: self.read_f64::<B>()?,
-            ifv_ground_damage: self.read_i32::<B>()?,
-            ifv_aerial_damage: self.read_i32::<B>()?,
-            ifv_ground_defence: self.read_i32::<B>()?,
-            ifv_aerial_defence: self.read_i32::<B>()?,
-            ifv_attack_cooldown_ticks: self.read_i32::<B>()?,
-            ifv_production_cost: self.read_i32::<B>()?,
-            arrv_durability: self.read_i32::<B>()?,
-            arrv_speed: self.read_f64::<B>()?,
-            arrv_vision_range: self.read_f64::<B>()?,
-            arrv_ground_defence: self.read_i32::<B>()?,
-            arrv_aerial_defence: self.read_i32::<B>()?,
-            arrv_production_cost: self.read_i32::<B>()?,
-            arrv_repair_range: self.read_f64::<B>()?,
-            arrv_repair_speed: self.read_f64::<B>()?,
-            helicopter_durability: self.read_i32::<B>()?,
-            helicopter_speed: self.read_f64::<B>()?,
-            helicopter_vision_range: self.read_f64::<B>()?,
-            helicopter_ground_attack_range: self.read_f64::<B>()?,
-            helicopter_aerial_attack_range: self.read_f64::<B>()?,
-            helicopter_ground_damage: self.read_i32::<B>()?,
-            helicopter_aerial_damage: self.read_i32::<B>()?,
-            helicopter_ground_defence: self.read_i32::<B>()?,
-            helicopter_aerial_defence: self.read_i32::<B>()?,
-            helicopter_attack_cooldown_ticks: self.read_i32::<B>()?,
-            helicopter_production_cost: self.read_i32::<B>()?,
-            fighter_durability: self.read_i32::<B>()?,
-            fighter_speed: self.read_f64::<B>()?,
-            fighter_vision_range: self.read_f64::<B>()?,
-            fighter_ground_attack_range: self.read_f64::<B>()?,
-            fighter_aerial_attack_range: self.read_f64::<B>()?,
-            fighter_ground_damage: self.read_i32::<B>()?,
-            fighter_aerial_damage: self.read_i32::<B>()?,
-            fighter_ground_defence: self.read_i32::<B>()?,
-            fighter_aerial_defence: self.read_i32::<B>()?,
-            fighter_attack_cooldown_ticks: self.read_i32::<B>()?,
-            fighter_production_cost: self.read_i32::<B>()?,
-            max_facility_capture_points: self.read_f64::<B>()?,
-            facility_capture_points_per_vehicle_per_tick: self.read_f64::<B>()?,
-            facility_width: self.read_f64::<B>()?,
-            facility_height: self.read_f64::<B>()?,
-            base_tactical_nuclear_strike_cooldown: self.read_i32::<B>()?,
-            tactical_nuclear_strike_cooldown_decrease_per_control_center: self.read_i32::<B>()?,
-            max_tactical_nuclear_strike_damage: self.read_f64::<B>()?,
-            tactical_nuclear_strike_radius: self.read_f64::<B>()?,
-            tactical_nuclear_strike_delay: self.read_i32::<B>()?,
+            victory_score: self.read_i32()?,
+            facility_capture_score: self.read_i32()?,
+            vehicle_elimination_score: self.read_i32()?,
+            action_detection_interval: self.read_i32()?,
+            base_action_count: self.read_i32()?,
+            additional_action_count_per_control_center: self.read_i32()?,
+            max_unit_group: self.read_i32()?,
+            terrain_weather_map_column_count: self.read_i32()?,
+            terrain_weather_map_row_count: self.read_i32()?,
+            plain_terrain_vision_factor: self.read_f64()?,
+            plain_terrain_stealth_factor: self.read_f64()?,
+            plain_terrain_speed_factor: self.read_f64()?,
+            swamp_terrain_vision_factor: self.read_f64()?,
+            swamp_terrain_stealth_factor: self.read_f64()?,
+            swamp_terrain_speed_factor: self.read_f64()?,
+            forest_terrain_vision_factor: self.read_f64()?,
+            forest_terrain_stealth_factor: self.read_f64()?,
+            forest_terrain_speed_factor: self.read_f64()?,
+            clear_weather_vision_factor: self.read_f64()?,
+            clear_weather_stealth_factor: self.read_f64()?,
+            clear_weather_speed_factor: self.read_f64()?,
+            cloud_weather_vision_factor: self.read_f64()?,
+            cloud_weather_stealth_factor: self.read_f64()?,
+            cloud_weather_speed_factor: self.read_f64()?,
+            rain_weather_vision_factor: self.read_f64()?,
+            rain_weather_stealth_factor: self.read_f64()?,
+            rain_weather_speed_factor: self.read_f64()?,
+            vehicle_radius: self.read_f64()?,
+            tank_durability: self.read_i32()?,
+            tank_speed: self.read_f64()?,
+            tank_vision_range: self.read_f64()?,
+            tank_ground_attack_range: self.read_f64()?,
+            tank_aerial_attack_range: self.read_f64()?,
+            tank_ground_damage: self.read_i32()?,
+            tank_aerial_damage: self.read_i32()?,
+            tank_ground_defence: self.read_i32()?,
+            tank_aerial_defence: self.read_i32()?,
+            tank_attack_cooldown_ticks: self.read_i32()?,
+            tank_production_cost: self.read_i32()?,
+            ifv_durability: self.read_i32()?,
+            ifv_speed: self.read_f64()?,
+            ifv_vision_range: self.read_f64()?,
+            ifv_ground_attack_range: self.read_f64()?,
+            ifv_aerial_attack_range: self.read_f64()?,
+            ifv_ground_damage: self.read_i32()?,
+            ifv_aerial_damage: self.read_i32()?,
+            ifv_ground_defence: self.read_i32()?,
+            ifv_aerial_defence: self.read_i32()?,
+            ifv_attack_cooldown_ticks: self.read_i32()?,
+            ifv_production_cost: self.read_i32()?,
+            arrv_durability: self.read_i32()?,
+            arrv_speed: self.read_f64()?,
+            arrv_vision_range: self.read_f64()?,
+            arrv_ground_defence: self.read_i32()?,
+            arrv_aerial_defence: self.read_i32()?,
+            arrv_production_cost: self.read_i32()?,
+            arrv_repair_range: self.read_f64()?,
+            arrv_repair_speed: self.read_f64()?,
+            helicopter_durability: self.read_i32()?,
+            helicopter_speed: self.read_f64()?,
+            helicopter_vision_range: self.read_f64()?,
+            helicopter_ground_attack_range: self.read_f64()?,
+            helicopter_aerial_attack_range: self.read_f64()?,
+            helicopter_ground_damage: self.read_i32()?,
+            helicopter_aerial_damage: self.read_i32()?,
+            helicopter_ground_defence: self.read_i32()?,
+            helicopter_aerial_defence: self.read_i32()?,
+            helicopter_attack_cooldown_ticks: self.read_i32()?,
+            helicopter_production_cost: self.read_i32()?,
+            fighter_durability: self.read_i32()?,
+            fighter_speed: self.read_f64()?,
+            fighter_vision_range: self.read_f64()?,
+            fighter_ground_attack_range: self.read_f64()?,
+            fighter_aerial_attack_range: self.read_f64()?,
+            fighter_ground_damage: self.read_i32()?,
+            fighter_aerial_damage: self.read_i32()?,
+            fighter_ground_defence: self.read_i32()?,
+            fighter_aerial_defence: self.read_i32()?,
+            fighter_attack_cooldown_ticks: self.read_i32()?,
+            fighter_production_cost: self.read_i32()?,
+            max_facility_capture_points: self.read_f64()?,
+            facility_capture_points_per_vehicle_per_tick: self.read_f64()?,
+            facility_width: self.read_f64()?,
+            facility_height: self.read_f64()?,
+            base_tactical_nuclear_strike_cooldown: self.read_i32()?,
+            tactical_nuclear_strike_cooldown_decrease_per_control_center: self.read_i32()?,
+            max_tactical_nuclear_strike_damage: self.read_f64()?,
+            tactical_nuclear_strike_radius: self.read_f64()?,
+            tactical_nuclear_strike_delay: self.read_i32()?,
         };
 
         Ok(result)
     }
 
-    fn read_player_context<B: ByteOrder>(&mut self, cache: &mut Cache) -> io::Result<PlayerContext> {
+    fn read_player_context(&mut self) -> io::Result<PlayerContext> {
         use std::io::{Error, ErrorKind};
 
         if !self.read_bool()? {
-            return Err(Error::new(ErrorKind::Other, "ReadMessage::read_player_context error: value is false"));
+            return Err(Error::new(ErrorKind::Other, "RemoteProcessClient::read_player_context error: value is false"));
         }
 
         let result = PlayerContext {
-            player: self.read_player::<B>(&mut cache.players)?,
-            world: self.read_world::<B>(cache)?,
+            player: self.read_player()?,
+            world: self.read_world()?,
         };
 
         Ok(result)
     }
 
-    fn read_player<B: ByteOrder>(&mut self, cache: &mut HashMap<i64, Player>) -> io::Result<Player> {
+    fn read_player(&mut self) -> io::Result<Player> {
         use std::io::{Error, ErrorKind};
 
         match self.read_u8()? {
-            0 => return Err(Error::new(ErrorKind::Other, "ReadMessage::read_player error: value is 0")),
+            0 => return Err(Error::new(ErrorKind::Other, "RemoteProcessClient::read_player error: value is 0")),
             127 => {
-                let id = self.read_i64::<B>()?;
-                return Ok(cache[&id].clone());
+                let id = self.read_i64()?;
+                return Ok(self.cache.players_by_id[&id].clone());
             },
             _ => {},
         }
 
         let result = Player {
-            id: self.read_i64::<B>()?,
+            id: self.read_i64()?,
             me: self.read_bool()?,
             strategy_crashed: self.read_bool()?,
-            score: self.read_i32::<B>()?,
-            remaining_action_cooldown_ticks: self.read_i32::<B>()?,
-            remaining_nuclear_strike_cooldown_ticks: self.read_i32::<B>()?,
-            next_nuclear_strike_vehicle_id: self.read_i64::<B>()?,
-            next_nuclear_strike_tick_index: self.read_i32::<B>()?,
-            next_nuclear_strike_x: self.read_f64::<B>()?,
-            next_nuclear_strike_y: self.read_f64::<B>()?,
+            score: self.read_i32()?,
+            remaining_action_cooldown_ticks: self.read_i32()?,
+            remaining_nuclear_strike_cooldown_ticks: self.read_i32()?,
+            next_nuclear_strike_vehicle_id: self.read_i64()?,
+            next_nuclear_strike_tick_index: self.read_i32()?,
+            next_nuclear_strike_x: self.read_f64()?,
+            next_nuclear_strike_y: self.read_f64()?,
         };
 
-        cache.insert(result.id, result.clone());
+        self.cache.players_by_id.insert(result.id, result.clone());
 
         Ok(result)
     }
 
-    fn read_world<B: ByteOrder>(&mut self, cache: &mut Cache) -> io::Result<World> {
+    fn read_world(&mut self) -> io::Result<World> {
         use std::io::{Error, ErrorKind};
 
         if !self.read_bool()? {
-            return Err(Error::new(ErrorKind::Other, "ReadMessage::read_world error: value is false"));
+            return Err(Error::new(ErrorKind::Other, "RemoteProcessClient::read_world error: value is false"));
         }
 
         let result = World {
-            tick_index: self.read_i32::<B>()?,
-            tick_count: self.read_i32::<B>()?,
-            width: self.read_f64::<B>()?,
-            height: self.read_f64::<B>()?,
-            players: self.read_vec_player::<B>(&mut cache.players)?,
-            new_vehicles: self.read_vec_vehicle::<B>()?,
-            vehicle_updates: self.read_vec_vehicle_update::<B>()?,
+            tick_index: self.read_i32()?,
+            tick_count: self.read_i32()?,
+            width: self.read_f64()?,
+            height: self.read_f64()?,
+            players: self.read_players()?,
+            new_vehicles: self.read_vehicles()?,
+            vehicle_updates: self.read_vehicles_update()?,
             terrain_by_cell_x_y: {
-                if cache.terrain_by_cell_x_y.is_empty() {
-                    cache.terrain_by_cell_x_y = self.read_vec_vec_terrain_type::<B>()?
+                if self.cache.terrain_by_cell_x_y.is_empty() {
+                    self.cache.terrain_by_cell_x_y = self.read_terrain_types_2d()?;
                 }
-                cache.terrain_by_cell_x_y.clone()
+                self.cache.terrain_by_cell_x_y.clone()
             },
             weather_by_cell_x_y: {
-                if cache.weather_by_cell_x_y.is_empty() {
-                    cache.weather_by_cell_x_y = self.read_vec_vec_weather_type::<B>()?
+                if self.cache.weather_by_cell_x_y.is_empty() {
+                    self.cache.weather_by_cell_x_y = self.read_weather_types_2d()?;
                 }
-                cache.weather_by_cell_x_y.clone()
+                self.cache.weather_by_cell_x_y.clone()
             },
-            facilities: self.read_vec_facility::<B>(&mut cache.facilities)?,
+            facilities: self.read_facilities()?,
         };
 
         Ok(result)
     }
 
-    fn read_vehicle<B: ByteOrder>(&mut self) -> io::Result<Vehicle> {
+    fn read_vehicle(&mut self) -> io::Result<Vehicle> {
         use std::io::{Error, ErrorKind};
 
         if !self.read_bool()? {
-            return Err(Error::new(ErrorKind::Other, "ReadMessage::read_vehicle error: value is false"));
+            return Err(Error::new(ErrorKind::Other, "RemoteProcessClient::read_vehicle error: value is false"));
         }
 
         let result = Vehicle {
-            id: self.read_i64::<B>()?,
-            x: self.read_f64::<B>()?,
-            y: self.read_f64::<B>()?,
-            radius: self.read_f64::<B>()?,
-            player_id: self.read_i64::<B>()?,
-            durability: self.read_i32::<B>()?,
-            max_durability: self.read_i32::<B>()?,
-            max_speed: self.read_f64::<B>()?,
-            vision_range: self.read_f64::<B>()?,
-            squared_vision_range: self.read_f64::<B>()?,
-            ground_attack_range: self.read_f64::<B>()?,
-            squared_ground_attack_range: self.read_f64::<B>()?,
-            aerial_attack_range: self.read_f64::<B>()?,
-            squared_aerial_attack_range: self.read_f64::<B>()?,
-            ground_damage: self.read_i32::<B>()?,
-            aerial_damage: self.read_i32::<B>()?,
-            ground_defence: self.read_i32::<B>()?,
-            aerial_defence: self.read_i32::<B>()?,
-            attack_cooldown_ticks: self.read_i32::<B>()?,
-            remaining_attack_cooldown_ticks: self.read_i32::<B>()?,
+            id: self.read_i64()?,
+            x: self.read_f64()?,
+            y: self.read_f64()?,
+            radius: self.read_f64()?,
+            player_id: self.read_i64()?,
+            durability: self.read_i32()?,
+            max_durability: self.read_i32()?,
+            max_speed: self.read_f64()?,
+            vision_range: self.read_f64()?,
+            squared_vision_range: self.read_f64()?,
+            ground_attack_range: self.read_f64()?,
+            squared_ground_attack_range: self.read_f64()?,
+            aerial_attack_range: self.read_f64()?,
+            squared_aerial_attack_range: self.read_f64()?,
+            ground_damage: self.read_i32()?,
+            aerial_damage: self.read_i32()?,
+            ground_defence: self.read_i32()?,
+            aerial_defence: self.read_i32()?,
+            attack_cooldown_ticks: self.read_i32()?,
+            remaining_attack_cooldown_ticks: self.read_i32()?,
             kind: self.read_vehicle_type()?,
             aerial: self.read_bool()?,
             selected: self.read_bool()?,
-            groups: self.read_vec_i32::<B>()?,
+            groups: self.read_vec_i32()?,
         };
 
         Ok(result)
     }
 
-    fn read_vehicle_update<B: ByteOrder>(&mut self) -> io::Result<VehicleUpdate> {
+    fn read_vehicle_update(&mut self) -> io::Result<VehicleUpdate> {
         use std::io::{Error, ErrorKind};
 
         if !self.read_bool()? {
-            return Err(Error::new(ErrorKind::Other, "ReadMessage::read_vehicle_update error: value is false"));
+            return Err(Error::new(ErrorKind::Other, "RemoteProcessClient::read_vehicle_update error: value is false"));
         }
 
         let result = VehicleUpdate {
-            id: self.read_i64::<B>()?,
-            x: self.read_f64::<B>()?,
-            y: self.read_f64::<B>()?,
-            durability: self.read_i32::<B>()?,
-            remaining_attack_cooldown_ticks: self.read_i32::<B>()?,
+            id: self.read_i64()?,
+            x: self.read_f64()?,
+            y: self.read_f64()?,
+            durability: self.read_i32()?,
+            remaining_attack_cooldown_ticks: self.read_i32()?,
             selected: self.read_bool()?,
-            groups: self.read_vec_i32::<B>()?,
+            groups: self.read_vec_i32()?,
         };
 
         Ok(result)
     }
 
-    fn read_terrain_type(&mut self) -> io::Result<Option<TerrainType>> {
-        use std::io::{Error, ErrorKind};
-        match self.read_i8()? {
-            -1 => Ok(None),
-            0 => Ok(Some(TerrainType::Plain)),
-            1 => Ok(Some(TerrainType::Swamp)),
-            2 => Ok(Some(TerrainType::Forest)),
-            v => Err(Error::new(ErrorKind::Other, format!("ReadMessage::read_terrain_type error: invalid TerrainType value: {}", v))),
-        }
-    }
-
-    fn read_weather_type(&mut self) -> io::Result<Option<WeatherType>> {
-        use std::io::{Error, ErrorKind};
-        match self.read_i8()? {
-            -1 => Ok(None),
-            0 => Ok(Some(WeatherType::Clear)),
-            1 => Ok(Some(WeatherType::Cloud)),
-            2 => Ok(Some(WeatherType::Rain)),
-            v => Err(Error::new(ErrorKind::Other, format!("ReadMessage::read_weather_type error: invalid WeatherType value: {}", v))),
-        }
-    }
-
-    fn read_vehicle_type(&mut self) -> io::Result<Option<VehicleType>> {
-        use std::io::{Error, ErrorKind};
-        match self.read_i8()? {
-            -1 => Ok(None),
-            0 => Ok(Some(VehicleType::Arrv)),
-            1 => Ok(Some(VehicleType::Fighter)),
-            2 => Ok(Some(VehicleType::Helicopter)),
-            3 => Ok(Some(VehicleType::Ifv)),
-            4 => Ok(Some(VehicleType::Tank)),
-            v => Err(Error::new(ErrorKind::Other, format!("ReadMessage::read_vehicle_type error: invalid VehicleType value: {}", v))),
-        }
-    }
-
-    fn read_facility<B: ByteOrder>(&mut self, cache: &mut HashMap<i64, Facility>) -> io::Result<Facility> {
+    fn read_facility(&mut self) -> io::Result<Facility> {
         use std::io::{Error, ErrorKind};
 
         match self.read_u8()? {
-            0 => return Err(Error::new(ErrorKind::Other, "ReadMessage::read_facility error: value is 0")),
+            0 => return Err(Error::new(ErrorKind::Other, "RemoteProcessClient::read_facility error: value is 0")),
             127 => {
-                let id = self.read_i64::<B>()?;
-                return Ok(cache[&id].clone());
+                let id = self.read_i64()?;
+                return Ok(self.cache.facilities_by_id[&id].clone());
             },
             _ => {},
         }
 
         let result = Facility {
-            id: self.read_i64::<B>()?,
+            id: self.read_i64()?,
             kind: self.read_facility_type()?,
-            owner_player_id: self.read_i64::<B>()?,
-            left: self.read_f64::<B>()?,
-            top: self.read_f64::<B>()?,
-            capture_points: self.read_f64::<B>()?,
+            owner_player_id: self.read_i64()?,
+            left: self.read_f64()?,
+            top: self.read_f64()?,
+            capture_points: self.read_f64()?,
             vehicle_type: self.read_vehicle_type()?,
-            production_progress: self.read_i32::<B>()?,
+            production_progress: self.read_i32()?,
         };
 
-        cache.insert(result.id, result.clone());
+        self.cache.facilities_by_id.insert(result.id, result.clone());
 
         Ok(result)
     }
 
-    fn read_facility_type(&mut self) -> io::Result<Option<FacilityType>> {
-        use std::io::{Error, ErrorKind};
-        match self.read_i8()? {
-            -1 => Ok(None),
-            0 => Ok(Some(FacilityType::ControlCenter)),
-            1 => Ok(Some(FacilityType::VehicleFactory)),
-            v => Err(Error::new(ErrorKind::Other, format!("ReadMessage::read_facility_type error: invalid FacilityType value: {}", v))),
-        }
-    }
+    read_option_enum_impl!(read_facility_type, FacilityType,
+        "RemoteProcessClient::read_facility_type error: invalid FacilityType value: {}",
+        ControlCenter, VehicleFactory);
 
-    fn read_vec_player<B: ByteOrder>(&mut self, cache: &mut HashMap<i64, Player>) -> io::Result<Vec<Player>> {
-        let len = self.read_i32::<B>()?;
+    read_option_enum_impl!(read_vehicle_type, VehicleType,
+        "RemoteProcessClient::read_vehicle_type error: invalid VehicleType value: {}",
+        Arrv, Fighter, Helicopter, Ifv, Tank);
+
+    read_option_enum_impl!(read_terrain_type, TerrainType,
+        "RemoteProcessClient::read_terrain_type error: invalid TerrainType value: {}",
+        Plain, Swamp, Forest);
+
+    read_option_enum_impl!(read_weather_type, WeatherType,
+        "RemoteProcessClient::read_weather_type error: invalid WeatherType value: {}",
+        Clear, Cloud, Rain);
+
+    fn read_players(&mut self) -> io::Result<Vec<Player>> {
+        let len = self.read_i32()?;
         if len < 0 {
-            Ok(cache.values().cloned().collect())
+            Ok(self.cache.players.clone())
         } else {
-            self.read_vec_impl::<B, _, _>(len as usize, |s| s.read_player::<B>(cache))
+            let players = self.read_vec_impl(len as usize, |s| s.read_player())?;
+            self.cache.players = players.clone();
+            Ok(players)
         }
     }
 
-    fn read_vec_vehicle<B: ByteOrder>(&mut self) -> io::Result<Vec<Vehicle>> {
-        self.read_vec::<B, _, _>(|s| s.read_vehicle::<B>())
+    fn read_vehicles(&mut self) -> io::Result<Vec<Vehicle>> {
+        self.read_vec(|s| s.read_vehicle())
     }
 
-    fn read_vec_vehicle_update<B: ByteOrder>(&mut self) -> io::Result<Vec<VehicleUpdate>> {
-        self.read_vec::<B, _, _>(|s| s.read_vehicle_update::<B>())
+    fn read_vehicles_update(&mut self) -> io::Result<Vec<VehicleUpdate>> {
+        self.read_vec(|s| s.read_vehicle_update())
     }
 
-    fn read_vec_vec_terrain_type<B: ByteOrder>(&mut self) -> io::Result<Vec<Vec<Option<TerrainType>>>> {
-        self.read_vec::<B, _, _>(|s| s.read_vec::<B, _, _>(|ss| ss.read_terrain_type()))
+    fn read_terrain_types_2d(&mut self) -> io::Result<Vec<Vec<Option<TerrainType>>>> {
+        self.read_vec(|s| s.read_vec(|ss| ss.read_terrain_type()))
     }
 
-    fn read_vec_vec_weather_type<B: ByteOrder>(&mut self) -> io::Result<Vec<Vec<Option<WeatherType>>>> {
-        self.read_vec::<B, _, _>(|s| s.read_vec::<B, _, _>(|ss| ss.read_weather_type()))
+    fn read_weather_types_2d(&mut self) -> io::Result<Vec<Vec<Option<WeatherType>>>> {
+        self.read_vec(|s| s.read_vec(|ss| ss.read_weather_type()))
     }
 
-    fn read_vec_facility<B: ByteOrder>(&mut self, cache: &mut HashMap<i64, Facility>) -> io::Result<Vec<Facility>> {
-        let len = self.read_i32::<B>()?;
+    fn read_facilities(&mut self) -> io::Result<Vec<Facility>> {
+        let len = self.read_i32()?;
         if len < 0 {
-            Ok(cache.values().cloned().collect())
+            Ok(self.cache.facilities.clone())
         } else {
-            self.read_vec_impl::<B, _, _>(len as usize, |s| s.read_facility::<B>(cache))
+            let facilities = self.read_vec_impl(len as usize, |s| s.read_facility())?;
+            self.cache.facilities = facilities.clone();
+            Ok(facilities)
         }
     }
 
-    fn read_vec_i64<B: ByteOrder>(&mut self) -> io::Result<Vec<i64>> {
-        self.read_vec::<B, _, _>(|s| s.read_i64::<B>())
+    fn read_vec_i32(&mut self) -> io::Result<Vec<i32>> {
+        self.read_vec(|s| s.read_i32())
     }
 
-    fn read_vec_i32<B: ByteOrder>(&mut self) -> io::Result<Vec<i32>> {
-        self.read_vec::<B, _, _>(|s| s.read_i32::<B>())
-    }
-
-    fn read_vec_i8<B: ByteOrder>(&mut self) -> io::Result<Vec<i8>> {
-        self.read_vec::<B, _, _>(|s| s.read_i8())
-    }
-
+    #[inline]
     fn read_bool(&mut self) -> io::Result<bool> {
         Ok(self.read_u8()? != 0)
     }
 
-    fn read_vec<B: ByteOrder, T, F>(&mut self, read: F) -> io::Result<Vec<T>>
+    fn read_vec<T, F>(&mut self, read: F) -> io::Result<Vec<T>>
         where F: FnMut(&mut Self) -> io::Result<T> {
         use std::io::{Error, ErrorKind};
-        let len = self.read_i32::<B>()?;
+        let len = self.read_i32()?;
         if len < 0 {
-            return Err(Error::new(ErrorKind::Other, format!("ReadMessage::read_vec error: len < 0, where len={}", len)));
+            return Err(Error::new(ErrorKind::Other, format!("RemoteProcessClient::read_vec error: len < 0, where len={}", len)));
         }
-        self.read_vec_impl::<B, _, _>(len as usize, read)
+        self.read_vec_impl(len as usize, read)
     }
 
-    fn read_vec_impl<B: ByteOrder, T, F>(&mut self, len: usize, mut read: F) -> io::Result<Vec<T>>
+    fn read_vec_impl<T, F>(&mut self, len: usize, mut read: F) -> io::Result<Vec<T>>
         where F: FnMut(&mut Self) -> io::Result<T> {
         let mut result = Vec::with_capacity(len);
         for _ in 0..len {
@@ -537,36 +491,57 @@ pub trait ReadMessage: ReadBytesExt {
         }
         Ok(result)
     }
-}
 
-impl<R: ReadBytesExt> ReadMessage for R {}
+    #[inline]
+    fn read_u8(&mut self) -> io::Result<(u8)> {
+        self.reader.read_u8()
+    }
 
-pub trait WriteMessage: WriteBytesExt {
-    fn write_message<B: ByteOrder>(&mut self, value: &Message) -> io::Result<()> {
+    #[inline]
+    fn read_i8(&mut self) -> io::Result<(i8)> {
+        self.reader.read_i8()
+    }
+
+    #[inline]
+    fn read_i32(&mut self) -> io::Result<(i32)> {
+        self.reader.read_i32::<LittleEndian>()
+    }
+
+    #[inline]
+    fn read_i64(&mut self) -> io::Result<(i64)> {
+        self.reader.read_i64::<LittleEndian>()
+    }
+
+    #[inline]
+    fn read_f64(&mut self) -> io::Result<(f64)> {
+        self.reader.read_f64::<LittleEndian>()
+    }
+
+    fn write_message(&mut self, value: &Message) -> io::Result<()> {
         self.write_message_id(value.get_id())?;
-        self.write_message_content::<B>(value)
+        self.write_message_content(value)?;
+        self.flush()
     }
 
     fn write_message_id(&mut self, value: i8) -> io::Result<()> {
         self.write_i8(value)
     }
 
-    fn write_message_content<B: ByteOrder>(&mut self, value: &Message) -> io::Result<()> {
+    fn write_message_content(&mut self, value: &Message) -> io::Result<()> {
         match value {
             &Message::UnknownMessage => unimplemented!(),
             &Message::GameOver => unimplemented!(),
-            &Message::AuthenticationToken(ref v) => self.write_authentication_token::<B>(v)?,
-            &Message::TeamSize(v) => self.write_i32::<B>(v)?,
-            &Message::ProtocolVersion(v) => self.write_i32::<B>(v)?,
+            &Message::AuthenticationToken(ref v) => self.write_authentication_token(v),
+            &Message::TeamSize(_) => unimplemented!(),
+            &Message::ProtocolVersion(v) => self.write_i32(v),
             &Message::GameContext(ref _v) => unimplemented!(),
             &Message::PlayerContext(ref _v) => unimplemented!(),
-            &Message::ActionMessage(ref v) => self.write_action::<B>(v)?,
+            &Message::ActionMessage(ref v) => self.write_action(v),
         }
-        self.flush()
     }
 
-    fn write_authentication_token<B: ByteOrder>(&mut self, value: &String) -> io::Result<()> {
-        self.write_i32::<B>(value.len() as i32)?;
+    fn write_authentication_token(&mut self, value: &String) -> io::Result<()> {
+        self.write_i32(value.len() as i32)?;
 
         for b in value.bytes() {
             self.write_u8(b)?;
@@ -575,34 +550,37 @@ pub trait WriteMessage: WriteBytesExt {
         Ok(())
     }
 
-    fn write_action<B: ByteOrder>(&mut self, value: &Action) -> io::Result<()> {
+    fn write_action(&mut self, value: &Action) -> io::Result<()> {
         self.write_bool(true)?;
         self.write_action_type(value.action)?;
-        self.write_i32::<B>(value.group)?;
-        self.write_f64::<B>(value.left)?;
-        self.write_f64::<B>(value.top)?;
-        self.write_f64::<B>(value.right)?;
-        self.write_f64::<B>(value.bottom)?;
-        self.write_f64::<B>(value.x)?;
-        self.write_f64::<B>(value.y)?;
-        self.write_f64::<B>(value.angle)?;
-        self.write_f64::<B>(value.factor)?;
-        self.write_f64::<B>(value.max_speed)?;
-        self.write_f64::<B>(value.max_angular_speed)?;
+        self.write_i32(value.group)?;
+        self.write_f64(value.left)?;
+        self.write_f64(value.top)?;
+        self.write_f64(value.right)?;
+        self.write_f64(value.bottom)?;
+        self.write_f64(value.x)?;
+        self.write_f64(value.y)?;
+        self.write_f64(value.angle)?;
+        self.write_f64(value.factor)?;
+        self.write_f64(value.max_speed)?;
+        self.write_f64(value.max_angular_speed)?;
         self.write_vehicle_type(value.vehicle_type)?;
-        self.write_i64::<B>(value.facility_id)?;
-        self.write_i64::<B>(value.vehicle_id)?;
+        self.write_i64(value.facility_id)?;
+        self.write_i64(value.vehicle_id)?;
         Ok(())
     }
 
+    #[inline]
     fn write_action_type(&mut self, value: Option<ActionType>) -> io::Result<()> {
         self.write_option_enum(value)
     }
 
+    #[inline]
     fn write_vehicle_type(&mut self, value: Option<VehicleType>) -> io::Result<()> {
         self.write_option_enum(value)
     }
 
+    #[inline]
     fn write_option_enum<T: Into<i8>>(&mut self, value: Option<T>) -> io::Result<()> {
         if let Some(v) = value {
             self.write_i8(v.into())
@@ -611,20 +589,52 @@ pub trait WriteMessage: WriteBytesExt {
         }
     }
 
+    #[inline]
     fn write_bool(&mut self, value: bool) -> io::Result<()> {
-        self.write_u8(if value { 1 } else { 0 })
+        self.writer.write_u8(if value { 1 } else { 0 })
+    }
+
+    #[inline]
+    fn write_u8(&mut self, value: u8) -> io::Result<()> {
+        self.writer.write_u8(value)
+    }
+
+    #[inline]
+    fn write_i8(&mut self, value: i8) -> io::Result<()> {
+        self.writer.write_i8(value)
+    }
+
+    #[inline]
+    fn write_i32(&mut self, value: i32) -> io::Result<()> {
+        self.writer.write_i32::<LittleEndian>(value)
+    }
+
+    #[inline]
+    fn write_i64(&mut self, value: i64) -> io::Result<()> {
+        self.writer.write_i64::<LittleEndian>(value)
+    }
+
+    #[inline]
+    fn write_f64(&mut self, value: f64) -> io::Result<()> {
+        self.writer.write_f64::<LittleEndian>(value)
+    }
+
+    #[inline]
+    fn flush(&mut self) -> io::Result<()> {
+        use std::io::Write;
+        self.writer.flush()
     }
 }
 
-impl<W: WriteBytesExt> WriteMessage for W {}
-
 impl Into<i8> for ActionType {
+    #[inline]
     fn into(self) -> i8 {
         self as i8
     }
 }
 
 impl Into<i8> for VehicleType {
+    #[inline]
     fn into(self) -> i8 {
         self as i8
     }
@@ -668,6 +678,21 @@ pub trait ByteOrder: Clone + Copy + Debug + Default + Eq + Hash + Ord + PartialE
     #[inline]
     fn write_f64(buf: &mut [u8], n: f64) {
         Self::write_u64(buf, unsafe { transmute(n) })
+    }
+}
+
+impl Message {
+    pub fn get_id(&self) -> i8 {
+        match *self {
+            Message::UnknownMessage => 0,
+            Message::GameOver => 1,
+            Message::AuthenticationToken(_) => 2,
+            Message::TeamSize(_) => 3,
+            Message::ProtocolVersion(_) => 4,
+            Message::GameContext(_) => 5,
+            Message::PlayerContext(_) => 6,
+            Message::ActionMessage(_) => 7,
+        }
     }
 }
 
@@ -814,250 +839,3 @@ pub trait WriteBytesExt: io::Write {
 }
 
 impl<W: io::Write + ?Sized> WriteBytesExt for W {}
-
-#[test]
-fn test_read_bool() {
-    use std::io::Cursor;
-    assert_eq!(Cursor::new(vec![0u8]).read_bool().unwrap(), false);
-    assert_eq!(Cursor::new(vec![1u8]).read_bool().unwrap(), true);
-    assert_eq!(Cursor::new(vec![255u8]).read_bool().unwrap(), true);
-}
-
-#[test]
-fn test_read_vec_i8() {
-    use std::io::Cursor;
-    let result = Cursor::new(vec![2u8, 0u8, 0u8, 0u8, 42u8, -42i8 as u8])
-        .read_vec_i8::<LittleEndian>()
-        .unwrap();
-    assert_eq!(result, vec![42i8, -42i8]);
-}
-
-#[test]
-fn test_read_vec_i32() {
-    use std::io::Cursor;
-    let result = Cursor::new(vec![2u8, 0u8, 0u8, 0u8, 42u8, 0u8, 0u8, 0u8, 13u8, 0u8, 0u8, 0u8])
-        .read_vec_i32::<LittleEndian>()
-        .unwrap();
-    assert_eq!(result, vec![42i32, 13i32]);
-}
-
-#[test]
-fn test_read_facility_type() {
-    use std::io::Cursor;
-    assert_eq!(Cursor::new(vec![-1i8 as u8]).read_facility_type().unwrap(), None);
-    assert_eq!(Cursor::new(vec![0u8]).read_facility_type().unwrap(), Some(FacilityType::ControlCenter));
-    assert_eq!(Cursor::new(vec![1u8]).read_facility_type().unwrap(), Some(FacilityType::VehicleFactory));
-    assert_eq!(Cursor::new(vec![6u8]).read_facility_type().is_ok(), false);
-}
-
-#[test]
-fn test_read_player() {
-    use std::io::Cursor;
-    let player = Player {
-        id: 42,
-        me: true,
-        strategy_crashed: false,
-        score: 13,
-        remaining_action_cooldown_ticks: 146,
-        remaining_nuclear_strike_cooldown_ticks: 43,
-        next_nuclear_strike_vehicle_id: 14,
-        next_nuclear_strike_tick_index: 147,
-        next_nuclear_strike_x: 1.0,
-        next_nuclear_strike_y: 2.0,
-    };
-    let mut cache = HashMap::new();
-    let result = Cursor::new(vec![
-        1u8,
-        42u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8,
-        1u8,
-        0u8,
-        13u8, 0u8, 0u8, 0u8,
-        146u8, 0u8, 0u8, 0u8,
-        43u8, 0u8, 0u8, 0u8,
-        14u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8,
-        147u8, 0u8, 0u8, 0u8,
-        0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 240u8, 63u8,
-        0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 64u8,
-    ]).read_player::<LittleEndian>(&mut cache).unwrap();
-    assert_eq!(result, player);
-    assert_eq!(cache[&42i64], result);
-}
-
-#[test]
-fn test_read_cached_player() {
-    use std::io::Cursor;
-    let player = Player {
-        id: 42,
-        me: true,
-        strategy_crashed: false,
-        score: 13,
-        remaining_action_cooldown_ticks: 146,
-        remaining_nuclear_strike_cooldown_ticks: 43,
-        next_nuclear_strike_vehicle_id: 14,
-        next_nuclear_strike_tick_index: 147,
-        next_nuclear_strike_x: 1.0,
-        next_nuclear_strike_y: 2.0,
-    };
-    let mut cache = [(player.id, player.clone())].iter().cloned().collect();
-    let result = Cursor::new(vec![
-        127u8,
-        42u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8,
-    ]).read_player::<LittleEndian>(&mut cache).unwrap();
-    assert_eq!(cache[&42i64], result);
-}
-
-#[test]
-fn test_read_message_game_over() {
-    use std::io::Cursor;
-    let mut cache = Cache {
-        facilities: HashMap::new(),
-        players: HashMap::new(),
-        terrain_by_cell_x_y: vec![],
-        weather_by_cell_x_y: vec![],
-    };
-    assert_eq!(
-        Cursor::new(vec![1u8]).read_message::<LittleEndian>(&mut cache).unwrap(),
-        Message::GameOver
-    );
-}
-
-#[test]
-fn test_read_message_team_size() {
-    use std::io::Cursor;
-    let mut cache = Cache {
-        facilities: HashMap::new(),
-        players: HashMap::new(),
-        terrain_by_cell_x_y: vec![],
-        weather_by_cell_x_y: vec![],
-    };
-    assert_eq!(
-        Cursor::new(vec![3u8, 42u8, 0u8, 0u8, 0u8]).read_message::<LittleEndian>(&mut cache).unwrap(),
-        Message::TeamSize(42)
-    );
-}
-
-#[test]
-fn test_read_vec_player() {
-    use std::io::Cursor;
-    let player = Player {
-        id: 42,
-        me: true,
-        strategy_crashed: false,
-        score: 13,
-        remaining_action_cooldown_ticks: 146,
-        remaining_nuclear_strike_cooldown_ticks: 43,
-        next_nuclear_strike_vehicle_id: 14,
-        next_nuclear_strike_tick_index: 147,
-        next_nuclear_strike_x: 1.0,
-        next_nuclear_strike_y: 2.0,
-    };
-    let mut cache = [(player.id, player.clone())].iter().cloned().collect();
-    let result = Cursor::new(vec![
-        1u8, 0u8, 0u8, 0u8,
-        127u8,
-        42u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8,
-    ]).read_vec_player::<LittleEndian>(&mut cache).unwrap();
-    assert_eq!(vec![cache[&42i64].clone()], result);
-}
-
-#[test]
-fn test_read_cached_vec_player() {
-    use std::io::Cursor;
-    let player = Player {
-        id: 42,
-        me: true,
-        strategy_crashed: false,
-        score: 13,
-        remaining_action_cooldown_ticks: 146,
-        remaining_nuclear_strike_cooldown_ticks: 43,
-        next_nuclear_strike_vehicle_id: 14,
-        next_nuclear_strike_tick_index: 147,
-        next_nuclear_strike_x: 1.0,
-        next_nuclear_strike_y: 2.0,
-    };
-    let mut cache = [(player.id, player.clone())].iter().cloned().collect();
-    let result = Cursor::new(vec![
-        255u8, 255u8, 255u8, 255u8,
-    ]).read_vec_player::<LittleEndian>(&mut cache).unwrap();
-    assert_eq!(vec![cache[&42i64].clone()], result);
-}
-
-#[test]
-fn test_write_bool_false() {
-    let mut buffer = vec![];
-    buffer.write_bool(false).unwrap();
-    assert_eq!(buffer, vec![0u8]);
-}
-
-#[test]
-fn test_write_bool_true() {
-    let mut buffer = vec![];
-    buffer.write_bool(true).unwrap();
-    assert_eq!(buffer, vec![1u8]);
-}
-
-#[test]
-fn test_write_message_authentication_token() {
-    let message = Message::AuthenticationToken("foo".to_string());
-    let mut buffer = vec![];
-    buffer.write_message::<LittleEndian>(&message).unwrap();
-    assert_eq!(buffer, vec![
-        2u8,
-        3u8, 0u8, 0u8, 0u8,
-        102u8, 111u8, 111u8,
-    ]);
-}
-
-#[test]
-fn test_write_message_protocol_version() {
-    let message = Message::ProtocolVersion(42);
-    let mut buffer = vec![];
-    buffer.write_message::<LittleEndian>(&message).unwrap();
-    assert_eq!(buffer, vec![
-        4u8,
-        42u8, 0u8, 0u8, 0u8,
-    ]);
-}
-
-#[test]
-fn test_write_message_action() {
-    let action = Action {
-        action: Some(ActionType::ClearAndSelect),
-        group: 1,
-        left: 2.0,
-        top: 3.0,
-        right: 4.0,
-        bottom: 5.0,
-        x: 6.0,
-        y: 7.0,
-        angle: 8.0,
-        factor: 9.0,
-        max_speed: 10.0,
-        max_angular_speed: 11.0,
-        vehicle_type: Some(VehicleType::Tank),
-        facility_id: 12,
-        vehicle_id: 13,
-    };
-    let message = Message::ActionMessage(action);
-    let mut buffer = vec![];
-    buffer.write_message::<LittleEndian>(&message).unwrap();
-    assert_eq!(buffer, vec![
-        7u8,
-        1u8,
-        1u8,
-        1u8, 0u8, 0u8, 0u8,
-        0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 64u8,
-        0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 8u8, 64u8,
-        0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 16u8, 64u8,
-        0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 20u8, 64u8,
-        0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 24u8, 64u8,
-        0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 28u8, 64u8,
-        0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 32u8, 64u8,
-        0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 34u8, 64u8,
-        0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 36u8, 64u8,
-        0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 38u8, 64u8,
-        4u8,
-        12u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8,
-        13u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8,
-    ]);
-}

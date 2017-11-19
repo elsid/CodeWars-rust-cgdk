@@ -5,6 +5,9 @@ mod my_strategy;
 mod remote_process_client;
 mod strategy;
 
+use std::io;
+use remote_process_client::RemoteProcessClient;
+
 struct Args {
     host: String,
     port: u16,
@@ -14,10 +17,20 @@ struct Args {
 fn main() {
     use std::io::{stderr, Write};
     use std::process::exit;
-    use remote_process_client::{LittleEndian, run};
 
     let args = parse_args();
-    match run::<LittleEndian>(&args.host[..], args.port, args.token) {
+
+    let client = match RemoteProcessClient::connect(&args.host[..], args.port) {
+        Ok(v) => v,
+        Err(v) => {
+            write!(&mut stderr(), "{:?}\n", v).unwrap();
+            exit(-1);
+        }
+    };
+
+    let mut runner = Runner::new(client, args.token);
+
+    match runner.run() {
         Ok(_) => (),
         Err(v) => {
             write!(&mut stderr(), "{:?}\n", v).unwrap();
@@ -39,5 +52,36 @@ fn parse_args() -> Args {
             port: 31001,
             token: "0000000000000000".to_string(),
         }
+    }
+}
+
+struct Runner {
+    client: RemoteProcessClient,
+    token: String,
+}
+
+impl Runner {
+    pub fn new(client: RemoteProcessClient, token: String,) -> Self {
+        Runner { client, token }
+    }
+
+    pub fn run(&mut self) -> io::Result<()> {
+        use my_strategy::MyStrategy;
+        use strategy::Strategy;
+        use model::Action;
+
+        self.client.write_authentication_token_message(self.token.clone())?;
+        self.client.write_protocol_version_message()?;
+        self.client.read_team_size_message()?;
+        let game = self.client.read_game_message()?;
+        let mut strategy = MyStrategy::default();
+
+        while let Some(player_context) = self.client.read_player_context_message()? {
+            let mut action = Action::default();
+            strategy.act(&player_context.player, &player_context.world, &game, &mut action);
+            self.client.write_action_message(action)?;
+        }
+
+        Ok(())
     }
 }
