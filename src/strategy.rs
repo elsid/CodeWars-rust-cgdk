@@ -1,5 +1,5 @@
-use model::{Game, Move, Player, World};
+use model::{Game, Action, Player, World};
 
 pub trait Strategy: Default {
-    fn move_(&mut self, me: &Player, world: &World, game: &Game, move_: &mut Move);
+    fn act(&mut self, me: &Player, world: &World, game: &Game, action: &mut Action);
 }

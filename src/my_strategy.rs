@@ -1,22 +1,22 @@
-use model::{ActionType, Game, Move, Player, World};
+use model::{ActionType, Game, Action, Player, World};
 use strategy::Strategy;
 
 #[derive(Default)]
 pub struct MyStrategy;
 
 impl Strategy for MyStrategy {
-    fn move_(&mut self, me: &Player, world: &World, game: &Game, move_: &mut Move) {
+    fn act(&mut self, me: &Player, world: &World, game: &Game, action: &mut Action) {
         if world.tick_index == 0 {
-            move_.action = Some(ActionType::ClearAndSelect);
-            move_.right = world.width;
-            move_.bottom = world.height;
+            action.action = Some(ActionType::ClearAndSelect);
+            action.right = world.width;
+            action.bottom = world.height;
             return;
         }
 
         if world.tick_index == 1 {
-            move_.action = Some(ActionType::Move);
-            move_.x = world.width / 2.0;
-            move_.y = world.height / 2.0;
+            action.action = Some(ActionType::Move);
+            action.x = world.width / 2.0;
+            action.y = world.height / 2.0;
         }
     }
 }

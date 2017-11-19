@@ -2,7 +2,7 @@ use super::action_type::ActionType;
 use super::vehicle_type::VehicleType;
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct Move {
+pub struct Action {
     pub action: Option<ActionType>,
     pub group: i32,
     pub left: f64,
@@ -20,9 +20,9 @@ pub struct Move {
     pub vehicle_id: i64,
 }
 
-impl Default for Move {
+impl Default for Action {
     fn default() -> Self {
-        Move {
+        Action {
             action: None,
             group: 0,
             left: 0.0,

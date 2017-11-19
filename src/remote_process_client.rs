@@ -9,7 +9,7 @@ use model::{
     Facility,
     FacilityType,
     Game,
-    Move,
+    Action,
     Player,
     PlayerContext,
     TerrainType,
@@ -26,7 +26,7 @@ pub fn run<'r, B: ByteOrder>(host: &'r str, port: u16, token: String) -> io::Res
     use std::collections::HashMap;
     use std::io::{BufReader, BufWriter, Error, ErrorKind};
     use std::net::TcpStream;
-    use model::Move;
+    use model::Action;
     use my_strategy::MyStrategy;
     use strategy::Strategy;
 
@@ -75,9 +75,9 @@ pub fn run<'r, B: ByteOrder>(host: &'r str, port: u16, token: String) -> io::Res
                                                 received: {:?}", v)))
         };
 
-        let mut move_ = Move::default();
-        strategy.move_(&player_context.player, &player_context.world, &game, &mut move_);
-        writer.write_message::<B>(&Message::MoveMessage(move_))?;
+        let mut action = Action::default();
+        strategy.act(&player_context.player, &player_context.world, &game, &mut action);
+        writer.write_message::<B>(&Message::ActionMessage(action))?;
     }
 
     Ok(())
@@ -100,7 +100,7 @@ pub enum Message {
     ProtocolVersion(i32),
     GameContext(Game),
     PlayerContext(PlayerContext),
-    MoveMessage(Move),
+    ActionMessage(Action),
 }
 
 impl Message {
@@ -113,7 +113,7 @@ impl Message {
             Message::ProtocolVersion(_) => 4,
             Message::GameContext(_) => 5,
             Message::PlayerContext(_) => 6,
-            Message::MoveMessage(_) => 7,
+            Message::ActionMessage(_) => 7,
         }
     }
 }
@@ -560,7 +560,7 @@ pub trait WriteMessage: WriteBytesExt {
             &Message::ProtocolVersion(v) => self.write_i32::<B>(v)?,
             &Message::GameContext(ref _v) => unimplemented!(),
             &Message::PlayerContext(ref _v) => unimplemented!(),
-            &Message::MoveMessage(ref v) => self.write_move::<B>(v)?,
+            &Message::ActionMessage(ref v) => self.write_action::<B>(v)?,
         }
         self.flush()
     }
@@ -575,7 +575,7 @@ pub trait WriteMessage: WriteBytesExt {
         Ok(())
     }
 
-    fn write_move<B: ByteOrder>(&mut self, value: &Move) -> io::Result<()> {
+    fn write_action<B: ByteOrder>(&mut self, value: &Action) -> io::Result<()> {
         self.write_bool(true)?;
         self.write_action_type(value.action)?;
         self.write_i32::<B>(value.group)?;
@@ -1020,8 +1020,8 @@ fn test_write_message_protocol_version() {
 }
 
 #[test]
-fn test_write_message_move() {
-    let move_ = Move {
+fn test_write_message_action() {
+    let action = Action {
         action: Some(ActionType::ClearAndSelect),
         group: 1,
         left: 2.0,
@@ -1038,7 +1038,7 @@ fn test_write_message_move() {
         facility_id: 12,
         vehicle_id: 13,
     };
-    let message = Message::MoveMessage(move_);
+    let message = Message::ActionMessage(action);
     let mut buffer = vec![];
     buffer.write_message::<LittleEndian>(&message).unwrap();
     assert_eq!(buffer, vec![
