@@ -14,3 +14,8 @@ pub enum ActionType {
     SetupVehicleProduction = 10,
     TacticalNuclearStrike = 11,
 }
+
+#[allow(dead_code)]
+impl ActionType {
+    pub const COUNT: usize = 12;
+}

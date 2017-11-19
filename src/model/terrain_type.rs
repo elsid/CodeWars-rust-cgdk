@@ -4,3 +4,8 @@ pub enum TerrainType {
     Swamp = 1,
     Forest = 2,
 }
+
+#[allow(dead_code)]
+impl TerrainType {
+    pub const COUNT: usize = 3;
+}

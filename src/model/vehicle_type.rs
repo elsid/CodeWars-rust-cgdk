@@ -6,3 +6,8 @@ pub enum VehicleType {
     Ifv = 3,
     Tank = 4,
 }
+
+#[allow(dead_code)]
+impl VehicleType {
+    pub const COUNT: usize = 5;
+}

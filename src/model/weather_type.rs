@@ -4,3 +4,8 @@ pub enum WeatherType {
     Cloud = 1,
     Rain = 2,
 }
+
+#[allow(dead_code)]
+impl WeatherType {
+    pub const COUNT: usize = 3;
+}
