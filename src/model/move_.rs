@@ -3,7 +3,7 @@ use super::vehicle_type::VehicleType;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Move {
-    pub action: ActionType,
+    pub action: Option<ActionType>,
     pub group: i32,
     pub left: f64,
     pub top: f64,
@@ -15,7 +15,7 @@ pub struct Move {
     pub factor: f64,
     pub max_speed: f64,
     pub max_angular_speed: f64,
-    pub vehicle_type: VehicleType,
+    pub vehicle_type: Option<VehicleType>,
     pub facility_id: i64,
     pub vehicle_id: i64,
 }
@@ -23,7 +23,7 @@ pub struct Move {
 impl Default for Move {
     fn default() -> Self {
         Move {
-            action: ActionType::Unknown,
+            action: None,
             group: 0,
             left: 0.0,
             top: 0.0,
@@ -35,7 +35,7 @@ impl Default for Move {
             factor: 0.0,
             max_speed: 0.0,
             max_angular_speed: 0.0,
-            vehicle_type: VehicleType::Unknown,
+            vehicle_type: None,
             facility_id: -1,
             vehicle_id: -1,
         }

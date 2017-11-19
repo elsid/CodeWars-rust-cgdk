@@ -25,7 +25,7 @@ pub struct Vehicle {
     pub aerial_defence: i32,
     pub attack_cooldown_ticks: i32,
     pub remaining_attack_cooldown_ticks: i32,
-    pub type_: VehicleType,
+    pub type_: Option<VehicleType>,
     pub aerial: bool,
     pub selected: bool,
     pub groups: Vec<i32>,

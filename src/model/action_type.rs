@@ -1,7 +1,6 @@
 #[allow(dead_code)]
 #[derive(Clone, Copy, Debug, Eq, PartialEq, PartialOrd, Ord, Hash)]
 pub enum ActionType {
-    Unknown = -1,
     None = 0,
     ClearAndSelect = 1,
     AddToSelection = 2,

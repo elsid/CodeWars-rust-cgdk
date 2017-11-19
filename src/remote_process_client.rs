@@ -86,8 +86,8 @@ pub fn run<'r, B: ByteOrder>(host: &'r str, port: u16, token: String) -> io::Res
 pub struct Cache {
     pub facilities: HashMap<i64, Facility>,
     pub players: HashMap<i64, Player>,
-    pub terrain_by_cell_x_y: Vec<Vec<TerrainType>>,
-    pub weather_by_cell_x_y: Vec<Vec<WeatherType>>,
+    pub terrain_by_cell_x_y: Vec<Vec<Option<TerrainType>>>,
+    pub weather_by_cell_x_y: Vec<Vec<Option<WeatherType>>>,
 }
 
 #[allow(dead_code)]
@@ -396,37 +396,37 @@ pub trait ReadMessage: ReadBytesExt {
         Ok(result)
     }
 
-    fn read_terrain_type(&mut self) -> io::Result<TerrainType> {
+    fn read_terrain_type(&mut self) -> io::Result<Option<TerrainType>> {
         use std::io::{Error, ErrorKind};
         match self.read_i8()? {
-            -1 => Ok(TerrainType::Unknown),
-            0 => Ok(TerrainType::Plain),
-            1 => Ok(TerrainType::Swamp),
-            2 => Ok(TerrainType::Forest),
+            -1 => Ok(None),
+            0 => Ok(Some(TerrainType::Plain)),
+            1 => Ok(Some(TerrainType::Swamp)),
+            2 => Ok(Some(TerrainType::Forest)),
             v => Err(Error::new(ErrorKind::Other, format!("ReadMessage::read_terrain_type error: invalid TerrainType value: {}", v))),
         }
     }
 
-    fn read_weather_type(&mut self) -> io::Result<WeatherType> {
+    fn read_weather_type(&mut self) -> io::Result<Option<WeatherType>> {
         use std::io::{Error, ErrorKind};
         match self.read_i8()? {
-            -1 => Ok(WeatherType::Unknown),
-            0 => Ok(WeatherType::Clear),
-            1 => Ok(WeatherType::Cloud),
-            2 => Ok(WeatherType::Rain),
+            -1 => Ok(None),
+            0 => Ok(Some(WeatherType::Clear)),
+            1 => Ok(Some(WeatherType::Cloud)),
+            2 => Ok(Some(WeatherType::Rain)),
             v => Err(Error::new(ErrorKind::Other, format!("ReadMessage::read_weather_type error: invalid WeatherType value: {}", v))),
         }
     }
 
-    fn read_vehicle_type(&mut self) -> io::Result<VehicleType> {
+    fn read_vehicle_type(&mut self) -> io::Result<Option<VehicleType>> {
         use std::io::{Error, ErrorKind};
         match self.read_i8()? {
-            -1 => Ok(VehicleType::Unknown),
-            0 => Ok(VehicleType::Arrv),
-            1 => Ok(VehicleType::Fighter),
-            2 => Ok(VehicleType::Helicopter),
-            3 => Ok(VehicleType::Ifv),
-            4 => Ok(VehicleType::Tank),
+            -1 => Ok(None),
+            0 => Ok(Some(VehicleType::Arrv)),
+            1 => Ok(Some(VehicleType::Fighter)),
+            2 => Ok(Some(VehicleType::Helicopter)),
+            3 => Ok(Some(VehicleType::Ifv)),
+            4 => Ok(Some(VehicleType::Tank)),
             v => Err(Error::new(ErrorKind::Other, format!("ReadMessage::read_vehicle_type error: invalid VehicleType value: {}", v))),
         }
     }
@@ -459,12 +459,12 @@ pub trait ReadMessage: ReadBytesExt {
         Ok(result)
     }
 
-    fn read_facility_type(&mut self) -> io::Result<FacilityType> {
+    fn read_facility_type(&mut self) -> io::Result<Option<FacilityType>> {
         use std::io::{Error, ErrorKind};
         match self.read_i8()? {
-            -1 => Ok(FacilityType::Unknown),
-            0 => Ok(FacilityType::ControlCenter),
-            1 => Ok(FacilityType::VehicleFactory),
+            -1 => Ok(None),
+            0 => Ok(Some(FacilityType::ControlCenter)),
+            1 => Ok(Some(FacilityType::VehicleFactory)),
             v => Err(Error::new(ErrorKind::Other, format!("ReadMessage::read_facility_type error: invalid FacilityType value: {}", v))),
         }
     }
@@ -486,11 +486,11 @@ pub trait ReadMessage: ReadBytesExt {
         self.read_vec::<B, _, _>(|s| s.read_vehicle_update::<B>())
     }
 
-    fn read_vec_vec_terrain_type<B: ByteOrder>(&mut self) -> io::Result<Vec<Vec<TerrainType>>> {
+    fn read_vec_vec_terrain_type<B: ByteOrder>(&mut self) -> io::Result<Vec<Vec<Option<TerrainType>>>> {
         self.read_vec::<B, _, _>(|s| s.read_vec::<B, _, _>(|ss| ss.read_terrain_type()))
     }
 
-    fn read_vec_vec_weather_type<B: ByteOrder>(&mut self) -> io::Result<Vec<Vec<WeatherType>>> {
+    fn read_vec_vec_weather_type<B: ByteOrder>(&mut self) -> io::Result<Vec<Vec<Option<WeatherType>>>> {
         self.read_vec::<B, _, _>(|s| s.read_vec::<B, _, _>(|ss| ss.read_weather_type()))
     }
 
@@ -595,12 +595,20 @@ pub trait WriteMessage: WriteBytesExt {
         Ok(())
     }
 
-    fn write_action_type(&mut self, value: ActionType) -> io::Result<()> {
-        self.write_i8(value as i8)
+    fn write_action_type(&mut self, value: Option<ActionType>) -> io::Result<()> {
+        self.write_option_enum(value)
     }
 
-    fn write_vehicle_type(&mut self, value: VehicleType) -> io::Result<()> {
-        self.write_i8(value as i8)
+    fn write_vehicle_type(&mut self, value: Option<VehicleType>) -> io::Result<()> {
+        self.write_option_enum(value)
+    }
+
+    fn write_option_enum<T: Into<i8>>(&mut self, value: Option<T>) -> io::Result<()> {
+        if let Some(v) = value {
+            self.write_i8(v.into())
+        } else {
+            self.write_i8(-1)
+        }
     }
 
     fn write_bool(&mut self, value: bool) -> io::Result<()> {
@@ -609,6 +617,18 @@ pub trait WriteMessage: WriteBytesExt {
 }
 
 impl<W: WriteBytesExt> WriteMessage for W {}
+
+impl Into<i8> for ActionType {
+    fn into(self) -> i8 {
+        self as i8
+    }
+}
+
+impl Into<i8> for VehicleType {
+    fn into(self) -> i8 {
+        self as i8
+    }
+}
 
 pub trait Sealed {}
 
@@ -824,9 +844,9 @@ fn test_read_vec_i32() {
 #[test]
 fn test_read_facility_type() {
     use std::io::Cursor;
-    assert_eq!(Cursor::new(vec![-1i8 as u8]).read_facility_type().unwrap(), FacilityType::Unknown);
-    assert_eq!(Cursor::new(vec![0u8]).read_facility_type().unwrap(), FacilityType::ControlCenter);
-    assert_eq!(Cursor::new(vec![1u8]).read_facility_type().unwrap(), FacilityType::VehicleFactory);
+    assert_eq!(Cursor::new(vec![-1i8 as u8]).read_facility_type().unwrap(), None);
+    assert_eq!(Cursor::new(vec![0u8]).read_facility_type().unwrap(), Some(FacilityType::ControlCenter));
+    assert_eq!(Cursor::new(vec![1u8]).read_facility_type().unwrap(), Some(FacilityType::VehicleFactory));
     assert_eq!(Cursor::new(vec![6u8]).read_facility_type().is_ok(), false);
 }
 
@@ -1002,7 +1022,7 @@ fn test_write_message_protocol_version() {
 #[test]
 fn test_write_message_move() {
     let move_ = Move {
-        action: ActionType::ClearAndSelect,
+        action: Some(ActionType::ClearAndSelect),
         group: 1,
         left: 2.0,
         top: 3.0,
@@ -1014,7 +1034,7 @@ fn test_write_message_move() {
         factor: 9.0,
         max_speed: 10.0,
         max_angular_speed: 11.0,
-        vehicle_type: VehicleType::Tank,
+        vehicle_type: Some(VehicleType::Tank),
         facility_id: 12,
         vehicle_id: 13,
     };
