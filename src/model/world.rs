@@ -14,8 +14,8 @@ pub struct World {
     pub players: Vec<Player>,
     pub new_vehicles: Vec<Vehicle>,
     pub vehicle_updates: Vec<VehicleUpdate>,
-    pub terrain_by_cell_x_y: Vec<Vec<Option<TerrainType>>>,
-    pub weather_by_cell_x_y: Vec<Vec<Option<WeatherType>>>,
+    pub terrain_by_cell_x_y: Vec<Vec<TerrainType>>,
+    pub weather_by_cell_x_y: Vec<Vec<WeatherType>>,
     pub facilities: Vec<Facility>,
 }
 

@@ -36,8 +36,8 @@ struct Cache {
     pub players: Vec<Player>,
     pub facilities_by_id: HashMap<i64, Facility>,
     pub players_by_id: HashMap<i64, Player>,
-    pub terrain_by_cell_x_y: Vec<Vec<Option<TerrainType>>>,
-    pub weather_by_cell_x_y: Vec<Vec<Option<WeatherType>>>,
+    pub terrain_by_cell_x_y: Vec<Vec<TerrainType>>,
+    pub weather_by_cell_x_y: Vec<Vec<WeatherType>>,
 }
 
 #[allow(dead_code)]
@@ -51,6 +51,24 @@ enum Message {
     GameContext(Game),
     PlayerContext(PlayerContext),
     ActionMessage(Action),
+}
+
+macro_rules! read_enum_impl {
+    ($function:ident, $name:ident, $error_format:tt, $($variant:ident),*) => {
+        fn $function(&mut self) -> io::Result<$name> {
+            let value = self.read_i8()?;
+
+            if value < 0 {
+                return Err(Error::new(ErrorKind::Other, format!($error_format, value)))
+            }
+
+            $(if value == $name::$variant as i8 {
+                Ok($name::$variant)
+            } else)* {
+                Err(Error::new(ErrorKind::Other, format!($error_format, value)))
+            }
+        }
+    };
 }
 
 macro_rules! read_option_enum_impl {
@@ -418,11 +436,11 @@ impl RemoteProcessClient {
         "RemoteProcessClient::read_vehicle_type error: invalid VehicleType value: {}",
         Arrv, Fighter, Helicopter, Ifv, Tank);
 
-    read_option_enum_impl!(read_terrain_type, TerrainType,
+    read_enum_impl!(read_terrain_type, TerrainType,
         "RemoteProcessClient::read_terrain_type error: invalid TerrainType value: {}",
         Plain, Swamp, Forest);
 
-    read_option_enum_impl!(read_weather_type, WeatherType,
+    read_enum_impl!(read_weather_type, WeatherType,
         "RemoteProcessClient::read_weather_type error: invalid WeatherType value: {}",
         Clear, Cloud, Rain);
 
@@ -445,11 +463,11 @@ impl RemoteProcessClient {
         self.read_vec(|s| s.read_vehicle_update())
     }
 
-    fn read_terrain_types_2d(&mut self) -> io::Result<Vec<Vec<Option<TerrainType>>>> {
+    fn read_terrain_types_2d(&mut self) -> io::Result<Vec<Vec<TerrainType>>> {
         self.read_vec(|s| s.read_vec(|ss| ss.read_terrain_type()))
     }
 
-    fn read_weather_types_2d(&mut self) -> io::Result<Vec<Vec<Option<WeatherType>>>> {
+    fn read_weather_types_2d(&mut self) -> io::Result<Vec<Vec<WeatherType>>> {
         self.read_vec(|s| s.read_vec(|ss| ss.read_weather_type()))
     }
 
